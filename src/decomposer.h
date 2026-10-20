@@ -3,7 +3,8 @@
 // Ported from com.zorigt.ime.keyboard.Decomposer.
 #pragma once
 
-#include <map>
+#include <array>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -20,16 +21,24 @@ public:
     std::vector<std::vector<std::string>> decompose(std::string_view str) const;
 
 private:
-    // Decomposer.Node; children are indices into nodes_.
+    // Decomposer.Node. Children are a 256-entry index by byte (-1 = none)
+    // instead of Java's HashMap<Character, Node>.
     struct Node {
         std::string key;
         bool is_end = false;
-        std::map<char, std::size_t> children;
+        std::array<std::int32_t, 256> children;
+        Node() { children.fill(-1); }
     };
 
-    void decompose(const std::vector<std::string>& prefixes, std::string_view str,
+    void decompose(std::vector<std::string>& prefixes, std::string_view str,
                    std::vector<std::vector<std::string>>& cases) const;
-    std::vector<std::size_t> check(std::string_view str) const;
+    // Decomposer.check(): the key nodes along the longest trie path that
+    // matches a prefix of str, shortest first. Appends to `out`.
+    void check(std::string_view str, std::vector<std::int32_t>& out) const;
+
+    std::int32_t child(std::int32_t node, char c) const {
+        return nodes_[node].children[static_cast<unsigned char>(c)];
+    }
 
     std::vector<Node> nodes_;  // nodes_[0] is the root
 };
