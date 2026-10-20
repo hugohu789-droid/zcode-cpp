@@ -13,7 +13,8 @@ ZCode is a form-code (形码) encoding. Each code point is one glyph component
 (tooth, belly, tail, …); a written letter is a run of one to three components.
 It borrows the 52 code points U+1865..U+18AA of the Unicode Mongolian block,
 and this library outputs them exactly as the Java original does. Render with
-a ZCode (Z52) font, e.g. Z52 Hara Tig (`python tools/fetch_font.py`).
+a ZCode (Z52) font, e.g. Z52 Hara Tig, bundled as
+`third_party/fonts/z52haratig.ttf` (license unconfirmed; see `NOTICE.md`).
 
 Internally a ZCode string is `std::u32string` (`zcode::CodePoint` =
 `char32_t`); `zcode::to_utf8()` converts at the boundary. Latin input is a

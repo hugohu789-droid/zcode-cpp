@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Download the reference ZCode font (Z52 Hara Tig) from its pinned source
-commit into third_party/fonts/ and verify its SHA-256. See NOTICE.md: the
-font's license is unconfirmed, so it is not committed to this repository."""
+"""Verify the bundled reference ZCode font (Z52 Hara Tig) in third_party/fonts/
+against its SHA-256, re-downloading it from its pinned source commit when it
+is missing or different. See NOTICE.md for its provenance and license status."""
 import hashlib
 import pathlib
 import sys

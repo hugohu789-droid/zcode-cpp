@@ -42,10 +42,13 @@ reference font used for this project is:
 That repository's `LICENSE` is MIT ("Copyright (c) 2025 Zmongol Editor
 Contributors") and covers its software; the fonts carry an older, different
 copyright ("Z Code", 2021–2023) and no license of their own, so the MIT grant
-cannot be assumed to cover them. **The font is therefore not committed to this
-repository** until its license is confirmed. `tools/fetch_font.py` downloads
-it from the pinned commit and verifies the hash, into the git-ignored
-`third_party/fonts/`. The library itself never needs the font.
+cannot be assumed to cover them.
+
+The font is included unmodified as `third_party/fonts/z52haratig.ttf`, at the
+project owner's direction, **while its license is still unconfirmed**; it is
+not covered by this project's GPL. `tools/fetch_font.py` re-downloads it from
+the pinned commit and verifies the hash. The library itself never needs the
+font.
 
 ## Data not included
 
