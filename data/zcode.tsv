@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Ported from com.zorigt.ime.letter.ZCode (east-mod/ime): the 52 ZCode glyph components.
+# Code points are borrowed from the Unicode Mongolian block but carry form-code meaning.
+# name	code_point
+titem	U+1865
+suul1	U+1866
+orhich	U+1867
+vrvgsilga_or_chachilga	U+1868
+achvg	U+186A
+hvms	U+186B
+silbi	U+186C
+gedes	U+186D
+silvvn	U+186E
+n_titem	U+186F
+n_orhich	U+1870
+n_achvg	U+1871
+b_banbvr_egsilge	U+1872
+b_banbvr_baga	U+1873
+b_banbvr_ih	U+1874
+p_chihi_egsilge	U+1875
+p_chihi_baga	U+1876
+p_chihi_ih	U+1877
+h_hanhar	U+1878
+agsilga	U+1887
+g_hanhar	U+1888
+dvsaltai_agsilga	U+1889
+hinhir	U+188A
+hunhur	U+188B
+m_titem	U+188C
+m_hurbelge	U+188D
+m_achvg	U+188E
+l_titem	U+188F
+l_hurbelge	U+1890
+l_achvg	U+1891
+s_agshilga	U+1893
+s_sechig	U+1894
+x_agshilga	U+1896
+x_sechig	U+1897
+t_senj	U+1898
+d_senj	U+1899
+q_acha	U+189A
+j_bosoo_silbi	U+189B
+y_erteger_silbi	U+189C
+r_suul	U+189D
+r_erbgeljin_silbi	U+189E
+w_gohtai_silbi	U+189F
+f_chihi_egsilge	U+18A0
+f_chihi_baga	U+18A1
+f_chihi_ih	U+18A2
+k_egsilge	U+18A3
+k_baga	U+18A4
+k_ih	U+18A5
+c_acha	U+18A6
+z_acha	U+18A7
+galig_tvvrai	U+18A8
+galig_r_malgai	U+18AA

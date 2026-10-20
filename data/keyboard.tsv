@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Ported from com.zorigt.ime.keyboard.KeyboardLayout: KEYS (in order) and keyMap.
+# key	letter
+a	A
+e	E
+i	I
+o	O
+u	U
+n	N
+b	B
+p	P
+h	H
+g	G
+m	M
+l	L
+s	S
+x	X
+t	T
+d	D
+q	Q
+j	J
+y	Y
+r	R
+w	W
+f	F
+k	K
+c	C
+z	Z
+H	GALIG_H
+R	GALIG_R
+L	GALIG_L
+Z	GALIG_ZH
+C	GALIG_CH

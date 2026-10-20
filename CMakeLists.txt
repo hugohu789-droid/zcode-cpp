@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+cmake_minimum_required(VERSION 3.21)
+project(zcode_cpp VERSION 0.1.0 LANGUAGES CXX)
+
+option(ZCODE_BUILD_TESTS "Build the GoogleTest suite" ON)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(MSVC)
+    set(ZCODE_WARNINGS /W4 /permissive- /utf-8)
+else()
+    set(ZCODE_WARNINGS -Wall -Wextra -Wpedantic)
+endif()
+
+# ---- data/*.tsv embedded at build time --------------------------------------
+set(ZCODE_DATA_TABLES zcode shapes rules keyboard)
+set(ZCODE_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+set(ZCODE_GENERATED_HEADERS)
+foreach(table IN LISTS ZCODE_DATA_TABLES)
+    set(in ${CMAKE_CURRENT_SOURCE_DIR}/data/${table}.tsv)
+    set(out ${ZCODE_GENERATED_DIR}/zcode_data_${table}.h)
+    add_custom_command(
+        OUTPUT ${out}
+        COMMAND ${CMAKE_COMMAND} -DINPUT=${in} -DOUTPUT=${out} -DSYMBOL=zcode_data_${table}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
+        DEPENDS ${in} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
+        COMMENT "Embedding data/${table}.tsv"
+        VERBATIM)
+    list(APPEND ZCODE_GENERATED_HEADERS ${out})
+endforeach()
+
+# ---- library ------------------------------------------------------------------
+add_library(zcode
+    src/decomposer.cpp
+    src/engine.cpp
+    src/key_filter.cpp
+    src/keyboard_layout.cpp
+    src/letter_shape_sequence.cpp
+    src/letter_splicer.cpp
+    src/rules.cpp
+    src/tables.cpp
+    src/tables_embedded.cpp
+    src/verifier.cpp
+    ${ZCODE_GENERATED_HEADERS})
+add_library(zcode::zcode ALIAS zcode)
+target_include_directories(zcode
+    PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${ZCODE_GENERATED_DIR})
+target_compile_options(zcode PRIVATE ${ZCODE_WARNINGS})
+
+# ---- tests --------------------------------------------------------------------
+if(ZCODE_BUILD_TESTS)
+    enable_testing()
+    find_package(GTest CONFIG QUIET)
+    if(NOT GTest_FOUND)
+        include(FetchContent)
+        FetchContent_Declare(googletest
+            URL https://github.com/google/googletest/releases/download/v1.15.2/googletest-1.15.2.tar.gz
+            URL_HASH SHA256=7b42b4d6ed48810c5362c265a17faebe90dc2373c885e5216439d37927f02926
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    endif()
+
+    add_executable(zcode_tests
+        tests/test_golden.cpp
+        tests/test_rules.cpp
+        tests/test_tables.cpp)
+    target_link_libraries(zcode_tests PRIVATE zcode GTest::gtest_main)
+    # white-box tests compare internal tables with the Java dumps
+    target_include_directories(zcode_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_compile_definitions(zcode_tests PRIVATE ZCODE_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata")
+    target_compile_options(zcode_tests PRIVATE ${ZCODE_WARNINGS})
+    include(GoogleTest)
+    gtest_discover_tests(zcode_tests)
+endif()

@@ -1,0 +1,136 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Ported from com.zorigt.ime.letter.base.* (A..Z, Galig*, NG) via com.zorigt.ime.letter.Letters.
+# One row per LetterShape field. Row order is significant: it is the order in which
+# Java's getDeclaredFields() returned them (declaration order), which KeyboardLayout.get()
+# and therefore the candidate output order depend on.
+# Rules name entries of rules.tsv; '-' means null (no constraint).
+# letter	field	latin_key	location	zcode	fuzzy_front	fuzzy_behind	severe_front	severe_behind
+A	aHead	a	HEAD	titem achvg	FRONT_EMPTY	-	FRONT_EMPTY	BEHIND_NOT_EMPTY
+A	aMiddle	a	MIDDLE	achvg	FRONT_NOT_EMPTY	-	FRONT_LIKE_MIDDLE_A	BEHIND_NOT_EMPTY
+A	aTailOrhich	a	TAIL	orhich	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_ORHICH_A	BEHIND_EMPTY
+A	aTailChachilga	a	TAIL	vrvgsilga_or_chachilga	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_CHACHILGA_A	BEHIND_EMPTY
+A	aTailVrvgsilga	a	TAIL	achvg vrvgsilga_or_chachilga	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_VRVGSILGA_A	BEHIND_EMPTY
+E	eHead	e	HEAD	titem	FRONT_EMPTY	-	FRONT_EMPTY	BEHIND_NOT_EMPTY
+E	eMiddle	e	MIDDLE	achvg	FRONT_NOT_EMPTY	-	FRONT_LIKE_MIDDLE_E	BEHIND_NOT_EMPTY
+E	eTailOrhich	e	TAIL	orhich	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_ORHICH_E	BEHIND_EMPTY
+E	eTailChachilga	e	TAIL	vrvgsilga_or_chachilga	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_CHACHILGA_E	BEHIND_EMPTY
+E	eTailVrvgsilga	e	TAIL	achvg vrvgsilga_or_chachilga	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_VRVGSILGA_E	BEHIND_EMPTY
+I	iHead	i	HEAD	titem silbi	FRONT_EMPTY	-	FRONT_EMPTY	BEHIND_NOT_EMPTY
+I	iiHead	i	HEAD	silbi silbi	FRONT_EMPTY	-	FRONT_EMPTY	BEHIND_NOT_EMPTY
+I	iMiddle	i	MIDDLE	silbi	FRONT_NOT_EMPTY	-	FRONT_LIKE_MIDDLE_I	BEHIND_NOT_EMPTY
+I	iiMiddle	i	MIDDLE	silbi silbi	FRONT_NOT_EMPTY	-	FRONT_LIKE_MIDDLE_II	BEHIND_NOT_EMPTY
+I	iTail	i	TAIL	hvms	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_HVMS_I	BEHIND_EMPTY
+I	iTailSilbiSuul1	i	TAIL	silbi suul1	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_SILBI_SUUL_1_I	BEHIND_EMPTY
+O	oHeadTitemGedes	o	HEAD	titem gedes	FRONT_EMPTY	-	FRONT_EMPTY	BEHIND_NOT_EMPTY
+O	oHeadGedes	o	HEAD	gedes	FRONT_EMPTY	-	FRONT_EMPTY	BEHIND_NOT_EMPTY
+O	oMiddleGedes	o	MIDDLE	gedes	FRONT_NOT_EMPTY	-	FRONT_LIKE_MIDDLE_O	BEHIND_NOT_EMPTY
+O	oMiddleBanbvrBaga	o	MIDDLE	b_banbvr_baga	-	BEHIND_LIKE_MIDDLE_BANBVR_BAGA_O	FRONT_LIKE_TAIL_BANBVR_BAGA	BEHIND_LIKE_MIDDLE_BANBVR_BAGA_O
+O	oTailGedes	o	TAIL	gedes	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_GEDES_O	BEHIND_EMPTY
+O	oTailBanbvrBaga	o	TAIL	b_banbvr_baga	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_BANBVR_BAGA	BEHIND_EMPTY
+U	uHead	u	HEAD	titem gedes silbi	FRONT_EMPTY	-	FRONT_EMPTY	BEHIND_NOT_EMPTY
+U	uMiddleGedesSilbi	u	MIDDLE	gedes silbi	FRONT_NOT_EMPTY	-	FRONT_LIKE_MIDDLE_GEDES_SILBI_U	BEHIND_NOT_EMPTY
+U	uMiddleGedes	u	MIDDLE	gedes	FRONT_NOT_EMPTY	-	FRONT_LIKE_MIDDLE_GEDES_U	BEHIND_NOT_EMPTY
+U	uTailGedes	u	TAIL	gedes	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_GEDES_U	BEHIND_EMPTY
+U	uTailBanbvrBaga	u	TAIL	b_banbvr_baga	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_LIKE_TAIL_BANBVR_BAGA_U	BEHIND_EMPTY
+U	uTailGedesSuul1	u	TAIL	gedes suul1	FRONT_NOT_EMPTY	BEHIND_EMPTY	FRONT_TAIL_GEDES_SUUL1_U	BEHIND_EMPTY
+N	nHead	n	HEAD	n_titem	-	-	-	-
+N	nMiddleNAchvg	n	MIDDLE	n_achvg	-	-	-	BEHIND_IS_EHSHIG
+N	nMiddleNOrhich	n	MIDDLE	n_orhich	-	BEHIND_IS_AE_CHACHILGA	-	BEHIND_IS_AE_CHACHILGA
+N	nMiddleAchvg	n	MIDDLE	achvg	-	-	-	BEHIND_IS_NOT_EHSHIG
+N	nTailOrhich	n	TAIL	orhich	-	-	-	-
+B	bHeadBanbvrBaga	b	HEAD	b_banbvr_baga	-	-	-	-
+B	bHeadBanbvrIh	b	HEAD	b_banbvr_ih	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+B	bMiddleBanbvrBaga	b	MIDDLE	b_banbvr_baga	-	-	-	-
+B	bMiddleBanbvrIh	b	MIDDLE	b_banbvr_ih	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+B	bTailBanbvrEgsilge	b	TAIL	b_banbvr_egsilge	-	-	-	-
+P	pHeadChihiBaga	p	HEAD	p_chihi_baga	-	-	-	-
+P	pHeadChihiIh	p	HEAD	p_chihi_ih	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+P	pMiddleChihiBaga	p	MIDDLE	p_chihi_baga	-	-	-	-
+P	pMiddleChihiIh	p	MIDDLE	p_chihi_ih	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+P	pTailChihiEgsilge	p	TAIL	p_chihi_egsilge	-	-	-	-
+H	hHeadHanhar	h	HEAD	h_hanhar	-	-	-	BEHIND_IS_CHINGA_EHSHIG
+H	hHeadHinhir	h	HEAD	hinhir	-	-	-	-
+H	hHeadHunhur	h	HEAD	hunhur	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+H	hMiddleHinhir	h	MIDDLE	hinhir	-	-	-	-
+H	hMiddleHunhur	h	MIDDLE	hunhur	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+H	hMiddleDoubleAchvg	h	MIDDLE	achvg achvg	-	-	-	BEHIND_IS_CHINGA_EHSHIG
+H	hMiddleAgsilga	h	MIDDLE	agsilga	-	BEHIND_IS_AE_CHACHILGA	-	BEHIND_IS_A_CHACHILGA
+H	hTailAgsilga	h	TAIL	agsilga	-	-	FRONT_IS_CHIGA_SEQUENCE	-
+H	hTailSilbiVrvgsilga	h	TAIL	silbi vrvgsilga_or_chachilga	-	-	FRONT_IS_NOT_CHIGA_SEQUENCE	-
+G	gHeadHanhar	g	HEAD	g_hanhar	-	-	-	BEHIND_IS_CHINGA_EHSHIG
+G	gHeadHinhir	g	HEAD	hinhir	-	-	-	-
+G	gHeadHunhur	g	HEAD	hunhur	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+G	gMiddleHinhir	g	MIDDLE	hinhir	-	-	-	-
+G	gMiddleHunhur	g	MIDDLE	hunhur	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+G	gMiddleDoubleNAchvg	g	MIDDLE	n_achvg n_achvg	-	-	FRONT_IS_NOT_MIDDLE_SD	BEHIND_IS_CHINGA_EHSHIG
+G	gMiddleDoubleAchvg	g	MIDDLE	achvg achvg	-	-	FRONT_IS_MIDDLE_SD	BEHIND_IS_CHINGA_EHSHIG
+G	gMiddleDoubleAchvgDagbvr	g	MIDDLE	achvg achvg	-	-	-	BEHIND_IS_NOT_EHSHIG
+G	gMiddleDvsaltaiAgsilga	g	MIDDLE	dvsaltai_agsilga	-	BEHIND_IS_AE_CHACHILGA	FRONT_IS_NOT_MIDDLE_SD	BEHIND_IS_A_CHACHILGA
+G	gMiddleAgsilga	g	MIDDLE	agsilga	-	BEHIND_IS_AE_CHACHILGA	FRONT_IS_MIDDLE_SD	BEHIND_IS_A_CHACHILGA
+G	gTailAgsilga	g	TAIL	agsilga	-	-	FRONT_IS_CHIGA_SEQUENCE	-
+G	gTailSilbiVrvgsilga	g	TAIL	silbi vrvgsilga_or_chachilga	-	-	FRONT_IS_NOT_CHIGA_SEQUENCE	-
+M	mHead	m	HEAD	m_titem	-	-	-	-
+M	mMiddleAchvg	m	MIDDLE	m_achvg	-	-	-	-
+M	mMiddleHurbelge	m	MIDDLE	m_hurbelge	-	BEHIND_IS_AE_CHACHILGA	-	BEHIND_IS_AE_CHACHILGA
+M	mTailHurbelge	m	TAIL	m_hurbelge	-	-	-	-
+L	lHead	l	HEAD	l_titem	-	-	-	-
+L	lMiddleAchvg	l	MIDDLE	l_achvg	-	-	-	-
+L	lMiddleHurbelge	l	MIDDLE	l_hurbelge	-	BEHIND_IS_AE_CHACHILGA	-	BEHIND_IS_AE_CHACHILGA
+L	lTailHurbelge	l	TAIL	l_hurbelge	-	-	-	-
+S	sHead	s	HEAD	s_sechig	-	-	-	-
+S	sMiddle	s	MIDDLE	s_sechig	-	-	-	-
+S	sTail	s	TAIL	s_agshilga	-	-	-	-
+X	xHead	x	HEAD	x_sechig	-	-	-	-
+X	xMidddle	x	MIDDLE	x_sechig	-	-	-	-
+X	xTail	x	TAIL	x_agshilga	-	-	-	-
+T	tHead	t	HEAD	t_senj	-	-	-	-
+T	tMiddleTSenj	t	MIDDLE	t_senj	-	-	-	-
+T	tMiddleDSenj	t	MIDDLE	d_senj	-	-	-	-
+T	tTail	t	TAIL	t_senj suul1	-	-	-	-
+D	dHeadTSenj	d	HEAD	t_senj	-	-	-	-
+D	dHeadDSenj	d	HEAD	d_senj	-	-	-	-
+D	dMiddleDSenj	d	MIDDLE	d_senj	-	-	-	BEHIND_IS_EHSHIG
+D	dMiddleGedesAchvg	d	MIDDLE	gedes achvg	-	-	-	BEHIND_IS_NOT_EHSHIG
+D	dTailGedesOrhich	d	TAIL	gedes orhich	-	-	-	-
+D	dTailDSenjSuul1	d	TAIL	d_senj suul1	-	-	-	-
+Q	qHead	q	HEAD	q_acha	-	-	-	-
+Q	qMiddle	q	MIDDLE	q_acha	-	-	-	-
+Q	qTail	q	TAIL	q_acha suul1	-	-	-	-
+J	jHead	j	HEAD	silbi	-	-	-	-
+J	jMiddle	j	MIDDLE	j_bosoo_silbi	-	-	-	-
+J	jTail	j	TAIL	j_bosoo_silbi suul1	-	-	-	-
+Y	yHead	y	HEAD	y_erteger_silbi	-	-	-	-
+Y	yMiddleErtegerSilbi	y	MIDDLE	y_erteger_silbi	-	-	-	-
+Y	yMiddleHvms	y	MIDDLE	hvms	-	BEHIND_IS_AE_CHACHILGA	-	BEHIND_IS_AE_CHACHILGA
+Y	yTail	y	TAIL	y_erteger_silbi suul1	-	-	-	-
+R	rHead	r	HEAD	r_erbgeljin_silbi	-	-	-	-
+R	rMiddleErbgeljinSilbi	r	MIDDLE	r_erbgeljin_silbi	-	-	-	-
+R	rMiddleSuul	r	MIDDLE	r_suul	-	BEHIND_IS_AE_CHACHILGA	-	BEHIND_IS_AE_CHACHILGA
+R	rTail	r	TAIL	r_suul	-	-	-	-
+W	wHead	w	HEAD	w_gohtai_silbi	-	-	-	-
+W	wMiddle	w	MIDDLE	w_gohtai_silbi	-	-	-	-
+W	wTail	w	TAIL	w_gohtai_silbi suul1	-	-	-	-
+F	fHeadChihiBaga	f	HEAD	f_chihi_baga	-	-	-	-
+F	fHeadChihiIh	f	HEAD	f_chihi_ih	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+F	fMiddleChihiBaga	f	MIDDLE	f_chihi_baga	-	-	-	-
+F	fMiddleChihiIh	f	MIDDLE	f_chihi_ih	-	-	-	BEHIND_LIKE_HEAD_BANBVR_IH_B
+F	fTailChihiEgsilge	f	TAIL	f_chihi_egsilge	-	-	-	-
+K	kHeadBaga	k	HEAD	k_baga	-	-	-	-
+K	kHeadIh	k	HEAD	k_ih	-	-	-	-
+K	kMiddleBaga	k	MIDDLE	k_baga	-	-	-	-
+K	kMiddleIh	k	MIDDLE	k_ih	-	-	-	-
+K	kTailEgsilge	k	TAIL	k_egsilge	-	-	-	-
+C	cHead	c	HEAD	c_acha	-	-	-	-
+C	cMiddle	c	MIDDLE	c_acha	-	-	-	-
+C	cTail	c	TAIL	c_acha suul1	-	-	-	-
+Z	zHead	z	HEAD	z_acha	-	-	-	-
+Z	zMiddle	z	MIDDLE	z_acha	-	-	-	-
+Z	zTail	z	TAIL	z_acha suul1	-	-	-	-
+GALIG_H	galigHHead	galig_h	HEAD	titem galig_tvvrai	-	-	-	-
+GALIG_H	galigHMiddle	galig_h	MIDDLE	galig_tvvrai	-	-	-	-
+GALIG_R	galigRHead	galig_r	HEAD	galig_r_malgai	-	-	-	-
+GALIG_L	galigLHead	galig_l	HEAD	l_titem galig_tvvrai	-	-	-	-
+GALIG_ZH	galigZhHead	galig_zh	HEAD	galig_tvvrai	-	-	-	-
+GALIG_CH	galigChHead	galig_ch	HEAD	gedes gedes	-	-	-	-
+NG	ngMiddle	ng	MIDDLE	achvg silbi vrvgsilga_or_chachilga	-	-	-	-
+NG	ngTail	ng	TAIL	achvg hinhir	-	-	-	-

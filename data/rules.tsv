@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Ported from com.zorigt.ime.letter.splice.front.* and .behind.* (east-mod/ime), in the field
+# order of FrontRuleHolder and BehindRuleHolder. Each Java rule class is one row.
+#
+# Front rules see the sequence built so far (lss); behind rules see the shape about to be
+# appended (next). Set membership uses LetterShape.equals(), i.e. (latin_key, zcode, location)
+# value equality, not identity. Shapes are named letter.field as in shapes.tsv.
+#
+# kinds
+#   front_empty                 lss is empty
+#   front_not_empty             lss is not empty
+#   last_in S...                lss not empty and last(lss) in S
+#   last_not_in S...            lss not empty and last(lss) not in S
+#   last_at_not_in LOC S...     lss not empty and location(last) == LOC and last(lss) not in S
+#   nature_is N                 lss not empty and nature(lss) == N
+#   nature_is_not N             lss not empty and nature(lss) != N
+#   not RULE                    (front) lss not empty and not RULE(lss)
+#                               (behind) next present and not RULE(next)
+#   behind_empty                next absent (the splicer never passes absent: always false)
+#   behind_not_empty            next present (always true inside the splicer)
+#   next_in S...                next present and next in S
+#   next_key_in K...            next present and latin_key(next) in K
+#
+# name	side	kind	args	java_class
+FRONT_EMPTY	front	front_empty	-	FrontEmpty
+FRONT_NOT_EMPTY	front	front_not_empty	-	FrontNotEmpty
+FRONT_LIKE_MIDDLE_A	front	last_not_in	B.bHeadBanbvrIh B.bMiddleBanbvrIh P.pHeadChihiIh P.pMiddleChihiIh H.hHeadHunhur H.hMiddleHunhur H.hHeadHinhir H.hMiddleHinhir G.gHeadHunhur G.gHeadHinhir G.gMiddleHinhir G.gMiddleHunhur F.fHeadChihiIh F.fMiddleChihiIh K.kHeadIh K.kMiddleIh	FrontLikeMiddleA
+FRONT_LIKE_TAIL_ORHICH_A	front	last_in	A.aHead A.aMiddle I.iHead I.iMiddle O.oHeadTitemGedes O.oMiddleGedes N.nHead N.nMiddleNAchvg H.hHeadHanhar G.gHeadHanhar M.mHead M.mMiddleAchvg L.lHead L.lMiddleAchvg S.sHead S.sMiddle X.xHead X.xMidddle T.tHead T.tMiddleDSenj T.tMiddleTSenj D.dHeadDSenj D.dMiddleDSenj Q.qHead Q.qMiddle J.jHead J.jMiddle Y.yHead Y.yMiddleErtegerSilbi R.rHead R.rMiddleErbgeljinSilbi W.wHead W.wMiddle C.cHead C.cMiddle Z.zHead Z.zMiddle GALIG_H.galigHHead GALIG_H.galigHMiddle GALIG_R.galigRHead GALIG_L.galigLHead GALIG_ZH.galigZhHead GALIG_CH.galigChHead	FrontLikeTailOrhichA
+FRONT_LIKE_TAIL_CHACHILGA_A	front	last_in	O.oMiddleBanbvrBaga N.nMiddleNOrhich H.hMiddleAgsilga G.gMiddleDvsaltaiAgsilga G.gMiddleAgsilga M.mMiddleHurbelge L.lMiddleHurbelge Y.yMiddleHvms R.rMiddleSuul	FrontLikeTailChachilgaA
+FRONT_LIKE_TAIL_VRVGSILGA_A	front	last_in	B.bHeadBanbvrBaga B.bMiddleBanbvrBaga P.pHeadChihiBaga P.pMiddleChihiBaga F.fHeadChihiBaga F.fMiddleChihiBaga K.kHeadBaga K.kMiddleBaga	FrontLikeTailVrvgsilgaA
+FRONT_LIKE_MIDDLE_E	front	last_not_in	B.bHeadBanbvrIh B.bMiddleBanbvrIh P.pHeadChihiIh P.pMiddleChihiIh H.hHeadHunhur H.hHeadHanhar H.hMiddleHunhur H.hMiddleDoubleAchvg G.gHeadHanhar G.gHeadHunhur G.gMiddleHunhur G.gMiddleDoubleAchvg G.gMiddleDoubleNAchvg F.fHeadChihiIh F.fMiddleChihiIh K.kHeadIh K.kMiddleIh	FrontLikeMiddleE
+FRONT_LIKE_TAIL_ORHICH_E	front	last_in	E.eHead E.eMiddle I.iHead I.iMiddle U.uHead U.uMiddleGedesSilbi U.uMiddleGedes N.nHead N.nMiddleNAchvg M.mHead M.mMiddleHurbelge L.lHead L.lMiddleAchvg S.sHead S.sMiddle X.xHead X.xMidddle T.tHead T.tMiddleDSenj D.dHeadDSenj D.dMiddleDSenj Q.qHead Q.qMiddle J.jHead J.jMiddle Y.yHead Y.yMiddleErtegerSilbi R.rHead R.rMiddleErbgeljinSilbi W.wHead W.wMiddle C.cHead C.cMiddle Z.zHead Z.zMiddle GALIG_H.galigHHead GALIG_H.galigHMiddle GALIG_R.galigRHead GALIG_L.galigLHead GALIG_ZH.galigZhHead GALIG_CH.galigChHead	FrontLikeTailOrhichE
+FRONT_LIKE_TAIL_CHACHILGA_E	front	last_in	N.nMiddleNOrhich G.gMiddleDvsaltaiAgsilga M.mMiddleHurbelge L.lMiddleHurbelge Y.yMiddleHvms R.rMiddleSuul	FrontLikeTailChachilgaE
+FRONT_LIKE_TAIL_VRVGSILGA_E	front	last_in	B.bHeadBanbvrBaga B.bMiddleBanbvrBaga P.pHeadChihiBaga P.pMiddleChihiBaga H.hHeadHinhir H.hMiddleHinhir F.fHeadChihiBaga F.fMiddleChihiBaga K.kHeadBaga K.kMiddleBaga	FrontLikeTailVrvgsilgaE
+FRONT_LIKE_MIDDLE_I	front	last_not_in	A.aHead A.aMiddle E.eHead E.eMiddle O.oHeadTitemGedes O.oMiddleGedes U.uMiddleGedes B.bHeadBanbvrIh B.bMiddleBanbvrIh P.pHeadChihiIh P.pMiddleChihiIh H.hHeadHunhur H.hHeadHanhar H.hMiddleHunhur H.hMiddleDoubleAchvg G.gHeadHanhar G.gHeadHunhur G.gMiddleHunhur G.gMiddleDoubleAchvg G.gMiddleDoubleNAchvg F.fHeadChihiIh F.fMiddleChihiIh K.kHeadIh K.kMiddleIh	FrontLikeMiddleI
+FRONT_LIKE_MIDDLE_II	front	last_in	A.aHead A.aMiddle E.eHead E.eMiddle O.oHeadTitemGedes O.oMiddleGedes	FrontLikeMiddleII
+FRONT_LIKE_TAIL_SILBI_SUUL_1_I	front	last_in	B.bHeadBanbvrBaga B.bMiddleBanbvrBaga P.pHeadChihiBaga P.pMiddleChihiBaga H.hHeadHinhir H.hMiddleHinhir G.gHeadHinhir G.gMiddleHinhir F.fHeadChihiBaga F.fMiddleChihiBaga K.kHeadBaga K.kMiddleBaga	FrontLikeTailSilbiSuul1I
+FRONT_LIKE_TAIL_HVMS_I	front	not	FRONT_LIKE_TAIL_SILBI_SUUL_1_I	FrontLikeTailHvmsI
+FRONT_LIKE_MIDDLE_O	front	last_not_in	B.bHeadBanbvrBaga B.bMiddleBanbvrBaga P.pHeadChihiBaga P.pMiddleChihiBaga H.hHeadHinhir H.hHeadHunhur H.hMiddleHinhir H.hMiddleHunhur G.gHeadHinhir G.gHeadHunhur G.gMiddleHunhur G.gMiddleHinhir F.fHeadChihiBaga F.fMiddleChihiBaga K.kHeadBaga K.kMiddleBaga	FrontLikeMiddleO
+FRONT_LIKE_TAIL_GEDES_O	front	last_in	B.bHeadBanbvrIh B.bMiddleBanbvrIh P.pHeadChihiIh P.pMiddleChihiIh F.fHeadChihiIh F.fMiddleChihiIh K.kHeadIh K.kMiddleIh	FrontLikeTailGedesO
+FRONT_LIKE_TAIL_BANBVR_BAGA	front	last_not_in	B.bHeadBanbvrBaga B.bHeadBanbvrIh B.bMiddleBanbvrBaga B.bMiddleBanbvrIh P.pHeadChihiBaga P.pHeadChihiIh P.pMiddleChihiBaga P.pMiddleChihiIh H.hHeadHinhir H.hHeadHunhur H.hMiddleHinhir H.hMiddleHunhur G.gHeadHinhir G.gHeadHunhur G.gMiddleHinhir G.gMiddleHunhur F.fHeadChihiBaga F.fHeadChihiIh F.fMiddleChihiBaga F.fMiddleChihiIh K.kHeadBaga K.kHeadIh K.kMiddleBaga K.kMiddleIh	FrontLikeTailBanbvrBaga
+FRONT_LIKE_MIDDLE_GEDES_SILBI_U	front	last_at_not_in	HEAD B.bHeadBanbvrBaga P.pHeadChihiBaga H.hHeadHanhar H.hHeadHinhir G.gHeadHanhar G.gHeadHinhir F.fHeadChihiBaga K.kHeadBaga	FrontLikeMiddleGedesSilbiU
+FRONT_LIKE_MIDDLE_GEDES_U	front	last_at_not_in	MIDDLE B.bMiddleBanbvrBaga P.pMiddleChihiBaga H.hMiddleHinhir H.hMiddleDoubleAchvg G.gMiddleHinhir G.gMiddleDoubleNAchvg G.gMiddleDoubleAchvg F.fMiddleChihiBaga K.kMiddleBaga	FrontLikeMiddleGedesU
+FRONT_LIKE_TAIL_GEDES_U	front	last_in	B.bHeadBanbvrIh B.bMiddleBanbvrIh P.pHeadChihiIh P.pMiddleChihiIh H.hHeadHunhur H.hMiddleHunhur G.gHeadHunhur G.gMiddleHunhur F.fHeadChihiIh F.fMiddleChihiIh K.kHeadIh K.kMiddleIh	FrontLikeTailGedesU
+FRONT_LIKE_TAIL_BANBVR_BAGA_U	front	last_not_in	N.nMiddleAchvg B.bHeadBanbvrBaga B.bHeadBanbvrIh B.bMiddleBanbvrBaga B.bMiddleBanbvrIh P.pHeadChihiBaga P.pHeadChihiIh P.pMiddleChihiBaga P.pMiddleChihiIh H.hHeadHinhir H.hHeadHunhur H.hHeadHanhar H.hMiddleHinhir H.hMiddleHunhur H.hMiddleDoubleAchvg G.gHeadHinhir G.gHeadHunhur G.gHeadHanhar G.gMiddleHinhir G.gMiddleHunhur G.gMiddleDoubleAchvg G.gMiddleDoubleNAchvg F.fHeadChihiBaga F.fHeadChihiIh F.fMiddleChihiBaga F.fMiddleChihiIh K.kHeadBaga K.kHeadIh K.kMiddleBaga K.kMiddleIh	FrontLikeTailBanbvrBagaU
+FRONT_TAIL_GEDES_SUUL1_U	front	last_at_not_in	HEAD H.hHeadHinhir H.hHeadHanhar G.gHeadHinhir G.gHeadHanhar	FrontTailGedesSuul1U
+FRONT_IS_NOT_MIDDLE_SD	front	last_not_in	S.sMiddle D.dMiddleGedesAchvg	FrontIsNotMiddleSD
+FRONT_IS_MIDDLE_SD	front	last_in	S.sMiddle D.dMiddleGedesAchvg	FrontIsMiddleSD
+FRONT_IS_CHIGA_SEQUENCE	front	nature_is	CHAGH	FrontIsChigaSequence
+FRONT_IS_NOT_CHIGA_SEQUENCE	front	nature_is_not	CHAGH	FrontIsNotChigaSequence
+BEHIND_EMPTY	behind	behind_empty	-	BehindEmpty
+BEHIND_NOT_EMPTY	behind	behind_not_empty	-	BehindNotEmpty
+BEHIND_LIKE_MIDDLE_BANBVR_BAGA_O	behind	next_in	A.aTailChachilga	BehindLikeMiddleBanbvrBagaO
+BEHIND_IS_EHSHIG	behind	next_key_in	a e i o u	BehindIsEhshig
+BEHIND_IS_NOT_EHSHIG	behind	not	BEHIND_IS_EHSHIG	BehindIsNotEhshig
+BEHIND_IS_AE_CHACHILGA	behind	next_in	A.aTailChachilga E.eTailChachilga	BehindIsAEChachilga
+BEHIND_LIKE_HEAD_BANBVR_IH_B	behind	next_in	O.oMiddleGedes O.oTailGedes U.uMiddleGedes U.uMiddleGedesSilbi U.uTailGedes U.uTailGedesSuul1	BehindLikeHeadBanbvrIhB
+BEHIND_IS_A_CHACHILGA	behind	next_in	A.aTailChachilga	BehindIsAChachilga
+BEHIND_IS_CHINGA_EHSHIG	behind	next_key_in	a o	BehindIsChingaEhshig
