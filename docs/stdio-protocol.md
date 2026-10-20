@@ -21,18 +21,31 @@ TAB-separated.
 TAB is safe as a separator because ZCode output can never contain it: ZCode
 code points are U+1865..U+18AA. A test pins this (`CandidatesNeverContainTabOrNewline`).
 
+## Sessions
+
+A host with several input contexts, a window each or an input client each,
+needs a shaping session for each, so the session commands carry an id. The
+server allocates ids; `OPEN` returns one.
+
+**Session 0 always exists and cannot be closed.** A single-context host, and a
+shell one-liner, can therefore ignore session management and just use `0`.
+
 ## Requests
 
 | Request | Meaning |
 |---|---|
-| `PUSH <key>` | Append one layout key to the session. The key is taken verbatim (a key may be several characters). |
-| `POP` | Drop the last key. No-op on an empty session. |
-| `CLEAR` | Empty the session. |
-| `KEYS` | The session's keys. |
-| `CAND <mode> [max] [dedup]` | Candidates for the session's keys. |
-| `SHAPE <mode> <latin>` | Stateless: shape a whole Latin string. |
-| `DECOMPOSE <latin>` | Every way of splitting the input into layout keys. |
+| `OPEN` | Allocate a session; the response carries its id. |
+| `CLOSE <sid>` | Destroy it. Session 0 is rejected. |
+| `PUSH <sid> <key>` | Append one layout key. The key is taken verbatim (a key may be several characters). |
+| `POP <sid>` | Drop the last key. No-op on an empty session. |
+| `CLEAR <sid>` | Empty the session. |
+| `KEYS <sid>` | The session's keys. |
+| `CAND <sid> <mode> [max] [dedup]` | Candidates for the session's keys. |
+| `SHAPE <mode> <latin>` | Stateless: shape a whole Latin string. No id. |
+| `DECOMPOSE <latin>` | Every way of splitting the input into layout keys. No id. |
 | `QUIT` | End the conversation. The response is sent before the service exits. |
+
+An unknown or missing `<sid>` is an error and changes nothing.
 
 `<mode>` is `severe` or `fuzzy`:
 
@@ -70,7 +83,7 @@ Incremental, the way an IME uses it — one key per keystroke, three candidates
 each time:
 
 ```console
-$ printf 'PUSH s\nCAND fuzzy 3\nPUSH a\nCAND fuzzy 3\nPUSH i\nCAND fuzzy 3\nQUIT\n' | zcode_stdio
+$ printf 'PUSH 0 s\nCAND 0 fuzzy 3\nPUSH 0 a\nCAND 0 fuzzy 3\nPUSH 0 i\nCAND 0 fuzzy 3\nQUIT\n' | zcode_stdio
 OK
 OK	ᢔ
 OK
@@ -83,7 +96,7 @@ OK
 Backspace, and recovery from a bad request:
 
 ```console
-$ printf 'PUSH s\nPUSH a\nBOGUS\nPOP\nKEYS\nQUIT\n' | zcode_stdio
+$ printf 'PUSH 0 s\nPUSH 0 a\nBOGUS\nPOP 0\nKEYS 0\nQUIT\n' | zcode_stdio
 OK
 OK
 ERR	unknown command
@@ -106,6 +119,21 @@ OK
 * Ask for `max` roughly equal to what the candidate window shows. The engine
   can produce very many candidates for a long word, and the cap is applied
   before the list is built.
-* The service holds exactly one session. A host that needs several
-  (one per input context) should run one process per session, or add a session
-  id to the protocol.
+* One process serves any number of sessions. Open one per input context and
+  close it when the context goes away, or just use session 0 if there is only
+  ever one.
+
+Two sessions, independent:
+
+```console
+$ printf 'OPEN\nOPEN\nPUSH 1 s\nPUSH 2 m\nKEYS 1\nKEYS 2\nCLOSE 1\nKEYS 1\nQUIT\n' | zcode_stdio
+OK	1
+OK	2
+OK
+OK
+OK	s
+OK	m
+OK
+ERR	unknown session
+OK
+```
