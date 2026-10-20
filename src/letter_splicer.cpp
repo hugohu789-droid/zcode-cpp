@@ -13,13 +13,13 @@
 namespace zcode {
 
 ZString SpliceResult::to_zstring(std::size_t i, const Tables& tables) const {
-    std::vector<ShapeId> path;
+    // One allocation of the exact size, filled from the end of the path.
+    ZString s(nodes[candidates[i]].length, U'\0');
+    std::size_t pos = s.size();
     for (std::uint32_t n = candidates[i]; n != no_parent; n = nodes[n].parent) {
-        path.push_back(nodes[n].shape);
-    }
-    ZString s;
-    for (auto it = path.rbegin(); it != path.rend(); ++it) {
-        s += tables.shapes[*it].shape;
+        const ZString& part = tables.shapes[nodes[n].shape].shape;
+        pos -= part.size();
+        std::copy(part.begin(), part.end(), s.begin() + static_cast<std::ptrdiff_t>(pos));
     }
     return s;
 }
@@ -28,6 +28,7 @@ LetterSplicer::LetterSplicer(const Tables& tables, const KeyboardLayout& layout,
     : tables_(tables), layout_(layout), verifier_(verifier) {
     for (const LetterShape& s : tables.shapes) {
         shape_nature_.push_back(nature_of(s.latin_key));
+        shape_length_.push_back(static_cast<std::uint32_t>(s.shape.size()));
     }
 }
 
@@ -69,17 +70,17 @@ SpliceResult LetterSplicer::splice(std::span<const std::string> latin_sequence) 
             for (ShapeId id : letter_shape_list) {
                 if (verifier_.can_splice<Fuzzy>(FrontState{}, id)) {
                     new_whole_lss_list.push_back(static_cast<std::uint32_t>(result.nodes.size()));
-                    result.nodes.push_back({SpliceResult::no_parent, id, next_nature(Nature::saarmag, id)});
+                    result.nodes.push_back(
+                        {SpliceResult::no_parent, shape_length_[id], id, next_nature(Nature::saarmag, id)});
                 }
             }
         } else {
             for (ShapeId id : letter_shape_list) {
                 for (std::uint32_t clss : complete_lss_list) {
-                    const SpliceResult::Node& c = result.nodes[clss];
+                    const SpliceResult::Node c = result.nodes[clss];
                     if (verifier_.can_splice<Fuzzy>(FrontState{false, c.shape, c.nature}, id)) {
-                        Nature n = next_nature(c.nature, id);
                         new_whole_lss_list.push_back(static_cast<std::uint32_t>(result.nodes.size()));
-                        result.nodes.push_back({clss, id, n});
+                        result.nodes.push_back({clss, c.length + shape_length_[id], id, next_nature(c.nature, id)});
                     }
                 }
             }

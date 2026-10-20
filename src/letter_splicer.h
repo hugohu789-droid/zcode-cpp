@@ -22,6 +22,7 @@ struct SpliceResult {
     static constexpr std::uint32_t no_parent = 0xFFFFFFFF;
     struct Node {
         std::uint32_t parent;
+        std::uint32_t length;  // code points of the path ending here
         ShapeId shape;
         Nature nature;  // LetterShapeSequence.getNature() of the path ending here
     };
@@ -52,7 +53,8 @@ private:
     const Tables& tables_;
     const KeyboardLayout& layout_;
     const SpliceTable& verifier_;
-    std::vector<Nature> shape_nature_;  // NatureUtil.getNature(latinKey) per shape
+    std::vector<Nature> shape_nature_;         // NatureUtil.getNature(latinKey) per shape
+    std::vector<std::uint32_t> shape_length_;  // code points per shape
 };
 
 }  // namespace zcode
