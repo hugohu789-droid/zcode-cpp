@@ -40,6 +40,7 @@ add_library(zcode
     src/letter_shape_sequence.cpp
     src/letter_splicer.cpp
     src/rules.cpp
+    src/session.cpp
     src/splice_table.cpp
     src/tables.cpp
     src/tables_embedded.cpp
@@ -69,6 +70,7 @@ if(ZCODE_BUILD_TESTS)
     add_executable(zcode_tests
         tests/test_golden.cpp
         tests/test_rules.cpp
+        tests/test_session.cpp
         tests/test_splice_table.cpp
         tests/test_tables.cpp)
     target_link_libraries(zcode_tests PRIVATE zcode GTest::gtest_main)

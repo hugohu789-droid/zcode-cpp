@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -79,6 +80,31 @@ int main(int argc, char** argv) {
         for (const auto& w : words)
             for (std::size_t n = 1; n <= w.size(); ++n) c.add(engine->shape(w.substr(0, n), zcode::Mode::fuzzy));
     });
+    // Per-keystroke candidates on key lists: stateless splice of every prefix
+    // versus one Session fed key by key.
+    std::vector<std::vector<std::string>> typed;
+    for (const auto& w : words) {
+        auto d = engine->decompose(w);
+        if (d.size() == 1 && !d[0].empty()) typed.push_back(d[0]);
+    }
+    for (zcode::Mode mode : {zcode::Mode::severe, zcode::Mode::fuzzy}) {
+        const bool severe = mode == zcode::Mode::severe;
+        run(severe ? "keys_stateless_severe" : "keys_stateless_fuzzy", reps, [&](Checksum& c) {
+            for (const auto& k : typed)
+                for (std::size_t n = 1; n <= k.size(); ++n)
+                    c.add(engine->splice(std::span<const std::string>(k.data(), n), mode));
+        });
+        run(severe ? "keys_session_severe" : "keys_session_fuzzy", reps, [&](Checksum& c) {
+            zcode::Session s(*engine);
+            for (const auto& k : typed) {
+                s.clear();
+                for (const auto& key : k) {
+                    s.push(key);
+                    c.add(s.candidates(mode));
+                }
+            }
+        });
+    }
     run("heavy_fuzzy", reps, [&](Checksum& c) {
         for (const auto& w : heavy) c.add(engine->shape(w, zcode::Mode::fuzzy));
     });

@@ -74,9 +74,37 @@ public:
     bool key_filter_accepts(std::string_view last_key, std::u32string_view candidate) const;
 
 private:
+    friend class Session;
     struct Impl;
     explicit Engine(std::unique_ptr<const Impl> impl);
     std::unique_ptr<const Impl> impl_;
+};
+
+// Incremental splicing for per-keystroke use (not in the Java original).
+//
+// candidates(mode) always equals engine.splice(keys(), mode), but a session
+// caches the work for all keys but the last, so pushing one key costs one
+// layer of splicing instead of re-splicing the whole sequence. Each mode is
+// computed only when first asked for. The engine must outlive the session.
+class Session {
+public:
+    explicit Session(const Engine& engine);
+    Session(Session&&) noexcept;
+    Session& operator=(Session&&) noexcept;
+    ~Session();
+
+    void push(std::string_view key);  // append one layout key
+    void pop();                       // remove the last key (backspace); no-op when empty
+    void clear();
+
+    const std::vector<std::string>& keys() const;
+
+    // The candidates for keys(), in the same order as Engine::splice().
+    std::vector<ZString> candidates(Mode mode);
+
+private:
+    struct State;
+    std::unique_ptr<State> state_;
 };
 
 // Encodes code points as UTF-8. Code points that are not Unicode scalar

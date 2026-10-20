@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "keyboard_layout.h"
@@ -15,23 +16,27 @@
 
 namespace zcode {
 
-// The candidates of one splice. Java builds every candidate as a full copy of
-// its prefix plus one shape; here all candidates share one arena of
-// {parent, shape} nodes and a candidate is a path back to a root.
-struct SpliceResult {
+// Java builds every candidate as a full copy of its prefix plus one shape;
+// here candidates share an arena of nodes and a candidate is the path from a
+// node back to a root.
+struct SpliceNode {
     static constexpr std::uint32_t no_parent = 0xFFFFFFFF;
-    struct Node {
-        std::uint32_t parent;
-        std::uint32_t length;  // code points of the path ending here
-        ShapeId shape;
-        Nature nature;  // LetterShapeSequence.getNature() of the path ending here
-    };
-    std::vector<Node> nodes;
+    std::uint32_t parent;
+    std::uint32_t length;  // code points of the path ending here
+    ShapeId shape;
+    Nature nature;  // LetterShapeSequence.getNature() of the path ending here
+};
+
+// LetterShapeSequence.toString() of the path ending at `node`.
+ZString materialize(const std::vector<SpliceNode>& nodes, std::uint32_t node, const Tables& tables);
+
+// The candidates of one splice.
+struct SpliceResult {
+    std::vector<SpliceNode> nodes;
     std::vector<std::uint32_t> candidates;  // final layer, in Java's output order
 
     std::size_t size() const { return candidates.size(); }
-    // LetterShapeSequence.toString() of candidate i.
-    ZString to_zstring(std::size_t i, const Tables& tables) const;
+    ZString to_zstring(std::size_t i, const Tables& tables) const { return materialize(nodes, candidates[i], tables); }
 };
 
 class LetterSplicer {
@@ -45,6 +50,18 @@ public:
     // LetterSplicer.severe(latinSequence): first key HEAD, middle keys MIDDLE,
     // last key TAIL; severe rules.
     SpliceResult severe(std::span<const std::string> latin_sequence) const;
+
+    // The shapes the Java loop takes for the key at `index` of `count` keys.
+    std::span<const ShapeId> shapes_for(std::string_view key, std::size_t index, std::size_t count,
+                                        bool fuzzy) const;
+
+    // One iteration of the Java loop: extends the layer `current` (node
+    // indices into `nodes`) by `shapes` into `next`. An empty `shapes` keeps
+    // the layer (Java's `continue`); an empty `current` restarts from the
+    // empty sequence.
+    template <bool Fuzzy>
+    void step(std::vector<SpliceNode>& nodes, const std::vector<std::uint32_t>& current,
+              std::span<const ShapeId> shapes, std::vector<std::uint32_t>& next) const;
 
 private:
     template <bool Fuzzy>
