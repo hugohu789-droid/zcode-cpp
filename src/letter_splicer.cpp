@@ -18,21 +18,13 @@ std::vector<LetterShapeSequence> LetterSplicer::splice(std::span<const std::stri
     std::vector<LetterShapeSequence> complete_lss_list;
     std::size_t i = 0;
     for (const std::string& key : latin_sequence) {
-        std::vector<ShapeId> letter_shape_list;
-        auto add = [&](Location loc) {
-            for (ShapeId id : layout_.get(key, loc)) {
-                letter_shape_list.push_back(id);
-            }
-        };
+        std::span<const ShapeId> letter_shape_list;
         if (i == 0) {
-            add(Location::head);
+            letter_shape_list = layout_.get(key, Location::head);
         } else if (i == latin_sequence.size() - 1) {
-            if (Fuzzy) {
-                add(Location::middle);
-            }
-            add(Location::tail);
+            letter_shape_list = Fuzzy ? layout_.get_middle_then_tail(key) : layout_.get(key, Location::tail);
         } else {
-            add(Location::middle);
+            letter_shape_list = layout_.get(key, Location::middle);
         }
         i++;
 
