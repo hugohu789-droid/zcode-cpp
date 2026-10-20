@@ -77,3 +77,13 @@ if(ZCODE_BUILD_TESTS)
     include(GoogleTest)
     gtest_discover_tests(zcode_tests)
 endif()
+
+# ---- benchmark ----------------------------------------------------------------
+option(ZCODE_BUILD_BENCH "Build the benchmark tool" ON)
+if(ZCODE_BUILD_BENCH)
+    add_executable(zcode_bench bench/zcode_bench.cpp)
+    target_link_libraries(zcode_bench PRIVATE zcode)
+    target_include_directories(zcode_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_compile_definitions(zcode_bench PRIVATE ZCODE_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata")
+    target_compile_options(zcode_bench PRIVATE ${ZCODE_WARNINGS})
+endif()
