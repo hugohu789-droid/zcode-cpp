@@ -37,11 +37,11 @@ struct Engine::Impl {
     KeyFilterFactory filters;
 
     std::vector<ZString> splice(std::span<const std::string> keys, Mode mode) const {
-        std::vector<LetterShapeSequence> seqs = mode == Mode::severe ? splicer.severe(keys) : splicer.fuzzy(keys);
+        SpliceResult r = mode == Mode::severe ? splicer.severe(keys) : splicer.fuzzy(keys);
         std::vector<ZString> out;
-        out.reserve(seqs.size());
-        for (const LetterShapeSequence& s : seqs) {
-            out.push_back(s.to_zstring(tables));
+        out.reserve(r.size());
+        for (std::size_t i = 0; i < r.size(); ++i) {
+            out.push_back(r.to_zstring(i, tables));
         }
         return out;
     }
