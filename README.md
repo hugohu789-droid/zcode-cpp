@@ -36,6 +36,23 @@ for (const auto& word : engine->shape_utf8("mongol", zcode::Mode::severe)) {
   prefix search). Can produce many candidates.
 - `splice()` and `decompose()` expose the two stages separately;
   `key_filter_accepts()` is the original's `b-tail` dictionary filter.
+- `count(keys, mode)` returns the exact number of candidates without
+  building them.
+
+Per keystroke, use a `Session`: it caches everything but the last key, so
+each key costs one layer of splicing. `candidates()` always equals
+`splice(keys(), mode)`.
+
+```cpp
+zcode::Session s(*engine);
+s.push("m"); s.push("o"); s.push("n");
+auto now = s.candidates(zcode::Mode::fuzzy);
+s.pop();  // backspace
+```
+
+`zcode::Options` (all off by default; the defaults reproduce the Java
+original exactly): `max_candidates` keeps only the first N candidates in the
+original order, `deduplicate` drops repeated ZCode strings keeping the first.
 
 No globals, no singletons, no I/O inside the algorithm. Candidates are
 returned in the same order as the Java original.
