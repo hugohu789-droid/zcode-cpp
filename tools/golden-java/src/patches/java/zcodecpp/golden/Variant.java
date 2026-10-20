@@ -5,7 +5,7 @@ package zcodecpp.golden;
 final class Variant {
     static final String NAME = "patched";
     /** The fixes in this source tree, one per replaced class (see each file's header). */
-    static final String PATCHES = "FrontLikeTailOrhichE";
+    static final String PATCHES = "FrontLikeTailOrhichE LetterSplicer";
 
     private Variant() {
     }

@@ -36,7 +36,7 @@
         <!-- variant-specific: the patch sources and the original files they replace -->
         <golden.variant.src>${project.basedir}/src/patches/java</golden.variant.src>
         <golden.replaced.1>com/zorigt/ime/letter/splice/front/FrontLikeTailOrhichE.java</golden.replaced.1>
-        <golden.replaced.2>none</golden.replaced.2>
+        <golden.replaced.2>com/zorigt/ime/letter/splice/LetterSplicer.java</golden.replaced.2>
     </properties>
 
     <profiles>

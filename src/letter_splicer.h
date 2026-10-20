@@ -57,10 +57,11 @@ public:
 
     // One iteration of the Java loop: extends the layer `current` (node
     // indices into `nodes`) by `shapes` into `next`. An empty `shapes` keeps
-    // the layer (Java's `continue`); an empty `current` restarts from the
-    // empty sequence.
+    // the layer (Java's `continue`). `started` tells whether an earlier key
+    // had shapes; if not, sequences start from the empty one. Returns the
+    // new `started`. (Deviation from the original: see letter_splicer.cpp.)
     template <bool Fuzzy>
-    void step(std::vector<SpliceNode>& nodes, const std::vector<std::uint32_t>& current,
+    bool step(std::vector<SpliceNode>& nodes, const std::vector<std::uint32_t>& current, bool started,
               std::span<const ShapeId> shapes, std::vector<std::uint32_t>& next) const;
 
     // splice(...).size() without building candidates: the same loop over

@@ -20,6 +20,7 @@ struct Session::State {
         std::vector<SpliceNode> nodes;
         // frontiers[k]: layer after keys 0..k, all spliced as non-last keys
         std::vector<std::vector<std::uint32_t>> frontiers;
+        std::vector<char> started;  // step()'s `started` after frontiers[k]
         std::vector<std::size_t> marks;  // nodes.size() right after frontiers[k]
         std::vector<std::uint32_t> scratch;
     };
@@ -35,9 +36,11 @@ struct Session::State {
             std::size_t k = t.frontiers.size();
             const std::vector<std::uint32_t>& current = k == 0 ? empty_layer : t.frontiers[k - 1];
             Location loc = k == 0 ? Location::head : Location::middle;
+            const bool started = k == 0 ? false : t.started[k - 1] != 0;
             std::vector<std::uint32_t> next;
-            engine->splicer.step<Fuzzy>(t.nodes, current, engine->layout.get(keys[k], loc), next);
+            bool now = engine->splicer.step<Fuzzy>(t.nodes, current, started, engine->layout.get(keys[k], loc), next);
             t.frontiers.push_back(std::move(next));
+            t.started.push_back(now ? 1 : 0);
             t.marks.push_back(t.nodes.size());
         }
     }
@@ -58,7 +61,7 @@ struct Session::State {
         }
         advance<Fuzzy>(t, n - 1);
         const std::size_t mark = t.nodes.size();
-        engine->splicer.step<Fuzzy>(t.nodes, t.frontiers[n - 2],
+        engine->splicer.step<Fuzzy>(t.nodes, t.frontiers[n - 2], t.started[n - 2] != 0,
                                     engine->splicer.shapes_for(keys[n - 1], n - 1, n, Fuzzy), t.scratch);
         engine->collect(t.nodes, t.scratch, options, out, seen);
         t.nodes.resize(mark);  // the last-key layer is not reused
@@ -69,6 +72,7 @@ struct Session::State {
         for (Track& t : tracks) {
             if (t.frontiers.size() > keep) {
                 t.frontiers.resize(keep);
+                t.started.resize(keep);
                 t.marks.resize(keep);
                 t.nodes.resize(keep == 0 ? 0 : t.marks[keep - 1]);
             }
