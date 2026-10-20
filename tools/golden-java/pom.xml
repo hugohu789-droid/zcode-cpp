@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<!--
+  Golden-data harness for zcode-cpp.
+
+  Compiles only the shaping-engine classes of the original east-mod/ime Java
+  sources (read-only, never modified) together with GoldenDump, and runs them
+  without Spring, MyBatis or a database.
+
+  Usage (from the repository root):
+    mvn -q -f tools/golden-java/pom.xml compile exec:java -Dexec.args="testdata"
+  Override the location of the Java original with -Dime.java.src=<dir>.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>zcodecpp</groupId>
+    <artifactId>golden-java</artifactId>
+    <version>1</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <ime.java.src>${project.basedir}/../../../ime-java/src/main/java</ime.java.src>
+    </properties>
+
+    <!-- Versions follow what the original pom resolves through
+         spring-boot-starter-parent 2.1.4.RELEASE (lombok, slf4j) or pins
+         explicitly (guava, commons-collections). -->
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.6</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>23.0</version>
+        </dependency>
+        <dependency>
+            <groupId>commons-collections</groupId>
+            <artifactId>commons-collections</artifactId>
+            <version>3.2.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.26</version>
+        </dependency>
+        <!-- The original logs every rejected candidate at INFO; silence it. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-nop</artifactId>
+            <version>1.7.26</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>add-ime-java-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${ime.java.src}</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <!-- Only the shaping engine; everything else needs Spring. -->
+                    <includes>
+                        <include>zcodecpp/**/*.java</include>
+                        <include>com/zorigt/ime/letter/**/*.java</include>
+                        <include>com/zorigt/ime/keyboard/*.java</include>
+                        <include>com/zorigt/ime/filter/KeyFilter.java</include>
+                        <include>com/zorigt/ime/filter/BTailKeyFilter.java</include>
+                        <include>com/zorigt/ime/common/Strings.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>zcodecpp.golden.GoldenDump</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
