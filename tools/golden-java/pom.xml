@@ -3,12 +3,19 @@
 <!--
   Golden-data harness for zcode-cpp.
 
-  Compiles only the shaping-engine classes of the original east-mod/ime Java
-  sources (read-only, never modified) together with GoldenDump, and runs them
-  without Spring, MyBatis or a database.
+  Copies only the shaping-engine classes of the original east-mod/ime Java
+  sources (read-only, never modified) into target/, compiles them together with
+  GoldenDump, and runs them without Spring, MyBatis or a database.
+
+  Default build: the original classes plus the bug fixes in src/patches/java
+  (each patched file replaces the original class of the same name). This is
+  what testdata/ is generated from.
+  Profile "original" (-Poriginal): the unmodified original, built separately in
+  target-original/.
 
   Usage (from the repository root):
     mvn -q -f tools/golden-java/pom.xml compile exec:java -Dexec.args="testdata"
+    mvn -q -f tools/golden-java/pom.xml -Poriginal compile exec:java -Dexec.args="<dir>"
   Override the location of the Java original with -Dime.java.src=<dir>.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -26,7 +33,25 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <ime.java.src>${project.basedir}/../../../ime-java/src/main/java</ime.java.src>
+        <!-- variant-specific: the patch sources and the original files they replace -->
+        <golden.variant.src>${project.basedir}/src/patches/java</golden.variant.src>
+        <golden.replaced.1>none</golden.replaced.1>
+        <golden.replaced.2>none</golden.replaced.2>
     </properties>
+
+    <profiles>
+        <profile>
+            <id>original</id>
+            <properties>
+                <golden.variant.src>${project.basedir}/src/original/java</golden.variant.src>
+                <golden.replaced.1>none</golden.replaced.1>
+                <golden.replaced.2>none</golden.replaced.2>
+            </properties>
+            <build>
+                <directory>${project.basedir}/target-original</directory>
+            </build>
+        </profile>
+    </profiles>
 
     <!-- Versions follow what the original pom resolves through
          spring-boot-starter-parent 2.1.4.RELEASE (lombok, slf4j) or pins
@@ -64,19 +89,54 @@
     <build>
         <plugins>
             <plugin>
+                <!-- Only the shaping engine; everything else needs Spring. -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-ime-java-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/ime-java-src</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${ime.java.src}</directory>
+                                    <includes>
+                                        <include>com/zorigt/ime/letter/**/*.java</include>
+                                        <include>com/zorigt/ime/keyboard/*.java</include>
+                                        <include>com/zorigt/ime/filter/KeyFilter.java</include>
+                                        <include>com/zorigt/ime/filter/BTailKeyFilter.java</include>
+                                        <include>com/zorigt/ime/common/Strings.java</include>
+                                    </includes>
+                                    <excludes>
+                                        <exclude>${golden.replaced.1}</exclude>
+                                        <exclude>${golden.replaced.2}</exclude>
+                                    </excludes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
                 <version>3.6.0</version>
                 <executions>
                     <execution>
-                        <id>add-ime-java-sources</id>
+                        <id>add-sources</id>
                         <phase>generate-sources</phase>
                         <goals>
                             <goal>add-source</goal>
                         </goals>
                         <configuration>
                             <sources>
-                                <source>${ime.java.src}</source>
+                                <source>${project.build.directory}/ime-java-src</source>
+                                <source>${golden.variant.src}</source>
                             </sources>
                         </configuration>
                     </execution>
@@ -86,17 +146,6 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
-                <configuration>
-                    <!-- Only the shaping engine; everything else needs Spring. -->
-                    <includes>
-                        <include>zcodecpp/**/*.java</include>
-                        <include>com/zorigt/ime/letter/**/*.java</include>
-                        <include>com/zorigt/ime/keyboard/*.java</include>
-                        <include>com/zorigt/ime/filter/KeyFilter.java</include>
-                        <include>com/zorigt/ime/filter/BTailKeyFilter.java</include>
-                        <include>com/zorigt/ime/common/Strings.java</include>
-                    </includes>
-                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
