@@ -206,5 +206,70 @@ TEST_F(ProtocolTest, StatelessCommandsTakeNoSessionId) {
     EXPECT_EQ(Fields(Send("DECOMPOSE sain"))[0], "OK");
 }
 
+// A host checks the protocol version before trusting an engine binary, so a
+// mismatched one fails at startup instead of on a real request.
+TEST_F(ProtocolTest, HelloReportsNameAndVersion) {
+    const std::vector<std::string> fields = Fields(Send("HELLO"));
+    ASSERT_EQ(fields.size(), 3u);
+    EXPECT_EQ(fields[0], "OK");
+    EXPECT_EQ(fields[1], "paiza-engine");
+    EXPECT_EQ(fields[2], "1");
+}
+
+// TYPE exists so a keystroke costs one round trip instead of two. It must be
+// exactly PUSH followed by CAND, or a host would get different candidates
+// depending on which it used.
+TEST_F(ProtocolTest, TypeEqualsPushThenCand) {
+    const std::string a = Fields(Send("OPEN"))[1];
+    const std::string b = Fields(Send("OPEN"))[1];
+
+    Send("PUSH " + a + " s");
+    const std::string via_push = Send("CAND " + a + " fuzzy 5");
+    const std::string via_type = Send("TYPE " + b + " s fuzzy 5");
+    EXPECT_EQ(via_type, via_push);
+}
+
+TEST_F(ProtocolTest, UntypeEqualsPopThenCand) {
+    const std::string a = Fields(Send("OPEN"))[1];
+    const std::string b = Fields(Send("OPEN"))[1];
+    for (const std::string& id : {a, b}) {
+        Send("PUSH " + id + " s");
+        Send("PUSH " + id + " a");
+    }
+    Send("POP " + a);
+    const std::string via_pop = Send("CAND " + a + " fuzzy 5");
+    const std::string via_untype = Send("UNTYPE " + b + " fuzzy 5");
+    EXPECT_EQ(via_untype, via_pop);
+    EXPECT_EQ(Send("KEYS " + b), "OK\ts");
+}
+
+// A control character in a field would break the line framing, so it is
+// rejected rather than stripped: stripping turns an injection attempt into a
+// valid-looking request.
+TEST_F(ProtocolTest, ControlCharactersInKeysAreRejected) {
+    EXPECT_EQ(Fields(Send("PUSH 0 a\tb"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("TYPE 0 a\tb fuzzy"))[0], "ERR");
+    EXPECT_EQ(Send("KEYS 0"), "OK");  // Nothing was pushed.
+}
+
+TEST_F(ProtocolTest, PushTakesExactlyOneKey) {
+    EXPECT_EQ(Fields(Send("PUSH 0 s a"))[0], "ERR");
+    EXPECT_EQ(Send("KEYS 0"), "OK");
+}
+
+TEST_F(ProtocolTest, TypeAndUntypeNeedAValidSessionAndMode) {
+    EXPECT_EQ(Fields(Send("TYPE 9999 s fuzzy"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("TYPE 0 s sideways"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("TYPE 0"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("UNTYPE 9999 fuzzy"))[0], "ERR");
+    EXPECT_EQ(Send("KEYS 0"), "OK");
+}
+
+// UNTYPE on an empty session is the backspace-past-the-start case.
+TEST_F(ProtocolTest, UntypeOnEmptySessionIsHarmless) {
+    EXPECT_EQ(Send("UNTYPE 0 fuzzy"), "OK");
+    EXPECT_EQ(Send("KEYS 0"), "OK");
+}
+
 }  // namespace
 }  // namespace zcode::service

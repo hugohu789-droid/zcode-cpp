@@ -34,6 +34,7 @@ shell one-liner, can therefore ignore session management and just use `0`.
 
 | Request | Meaning |
 |---|---|
+| `HELLO` | Engine name and protocol version. |
 | `OPEN` | Allocate a session; the response carries its id. |
 | `CLOSE <sid>` | Destroy it. Session 0 is rejected. |
 | `PUSH <sid> <key>` | Append one layout key. The key is taken verbatim (a key may be several characters). |
@@ -41,11 +42,32 @@ shell one-liner, can therefore ignore session management and just use `0`.
 | `CLEAR <sid>` | Empty the session. |
 | `KEYS <sid>` | The session's keys. |
 | `CAND <sid> <mode> [max] [dedup]` | Candidates for the session's keys. |
+| `TYPE <sid> <key> <mode> [max] [dedup]` | Push a key **and** return the candidates, in one exchange. |
+| `UNTYPE <sid> <mode> [max] [dedup]` | Pop a key **and** return the candidates. |
 | `SHAPE <mode> <latin>` | Stateless: shape a whole Latin string. No id. |
 | `DECOMPOSE <latin>` | Every way of splitting the input into layout keys. No id. |
 | `QUIT` | End the conversation. The response is sent before the service exits. |
 
-An unknown or missing `<sid>` is an error and changes nothing.
+An unknown or missing `<sid>` is an error and changes nothing. That holds for
+`TYPE` and `UNTYPE` too: the key is pushed or popped only after every field
+has validated, so a rejected request never half-applies.
+
+A field carrying a control character is **rejected, not stripped**. Stripping
+would turn an injection attempt into a valid-looking request, and a control
+character is exactly what would break the line framing.
+
+### Version handshake
+
+```console
+$ printf 'HELLO
+QUIT
+' | zcode_stdio
+OK	paiza-engine	1
+OK
+```
+
+A host should check this before trusting an engine binary, so a mismatch fails
+at startup rather than on a real request.
 
 `<mode>` is `severe` or `fuzzy`:
 
@@ -79,7 +101,19 @@ OK	ᢔᡪᡬᡱ	ᢔᡪᡬᡬᡱ	ᢔᡪᡬᡰ	ᢔᡪᡬᡬᡰ	ᢔᡪᡬᡪ	ᢔᡪ
 OK
 ```
 
-Incremental, the way an IME uses it — one key per keystroke, three candidates
+Incremental with `TYPE`, the way an IME should use it — one round trip per
+keystroke:
+
+```console
+$ printf 'TYPE 0 s fuzzy 3\nTYPE 0 a fuzzy 3\nTYPE 0 i fuzzy 3\nUNTYPE 0 fuzzy 3\nQUIT\n' | zcode_stdio
+OK	ᢔ
+OK	ᢔᡪ	ᢔᡧ	ᢔᡨ
+OK	ᢔᡪᡬ	ᢔᡪᡬᡬ	ᢔᡪᡫ
+OK	ᢔᡪ	ᢔᡧ	ᢔᡨ
+OK
+```
+
+The same thing with the separate commands — one key per keystroke, three candidates
 each time:
 
 ```console
@@ -111,9 +145,11 @@ OK
 
 ## Notes for a host
 
-* Use a `Session` (`PUSH`/`POP`/`CAND`) rather than re-sending the whole string
-  per keystroke: the session caches every key but the last, so a keystroke
-  costs one layer of splicing.
+* Use `TYPE` and `UNTYPE` per keystroke. They combine the mutation and the
+  query, so a keystroke costs **one** round trip, and the session caches every
+  key but the last, so it costs one layer of splicing. `PUSH`+`CAND` gives the
+  same answer in two round trips; with a pipe between the processes the extra
+  trip costs far more than the splicing saved.
 * `CAND` and `SHAPE` agree for the same keys; a test pins that, so a host may
   use `SHAPE` to re-check a finished word.
 * Ask for `max` roughly equal to what the candidate window shows. The engine

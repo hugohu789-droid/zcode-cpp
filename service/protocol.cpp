@@ -59,6 +59,16 @@ bool ParseUnsigned(std::string_view text, std::size_t* out) {
     return true;
 }
 
+// A field carrying a control character would break the line framing, so a
+// request carrying one is rejected rather than quietly stripped: stripping
+// would turn an injection attempt into a valid-looking request.
+bool HasControlChar(std::string_view text) {
+    for (const char c : text) {
+        if (static_cast<unsigned char>(c) < 0x20) return true;
+    }
+    return false;
+}
+
 // "OK" plus one field per item.
 std::string Ok(const std::vector<std::string>& items) {
     std::string response = "OK";
@@ -120,6 +130,12 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
         return "OK";
     }
 
+    if (command == "HELLO") {
+        // Name and protocol version, so a host can refuse an engine it does
+        // not understand instead of failing later on a real request.
+        return Ok({"paiza-engine", "1"});
+    }
+
     if (command == "OPEN") {
         const std::uint64_t id = state_->next_id++;
         state_->sessions.emplace(id, Session(state_->engine));
@@ -139,7 +155,8 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
 
     // Everything below is session-scoped and takes an id first.
     if (command == "CLOSE" || command == "PUSH" || command == "POP" ||
-        command == "CLEAR" || command == "KEYS" || command == "CAND") {
+        command == "CLEAR" || command == "KEYS" || command == "CAND" ||
+        command == "TYPE" || command == "UNTYPE") {
         std::string_view tail;
         const std::string_view id_text = NextToken(rest, &tail);
         std::size_t id = 0;
@@ -158,10 +175,12 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
         }
 
         if (command == "PUSH") {
-            // One key per request: a key may be several characters ("ng"), so
-            // it is taken verbatim rather than split further.
-            if (tail.empty()) return Err("PUSH needs a key");
-            session->push(tail);
+            std::string_view extra;
+            const std::string_view key = NextToken(tail, &extra);
+            if (key.empty()) return Err("PUSH needs a key");
+            if (!extra.empty()) return Err("PUSH takes one key");
+            if (HasControlChar(key)) return Err("key has a control character");
+            session->push(key);
             return "OK";
         }
 
@@ -179,9 +198,26 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
             return Ok(session->keys());
         }
 
-        // CAND
+        // TYPE pushes a key first, UNTYPE pops one; both then fall through
+        // to the CAND path, so a keystroke costs one round trip rather than
+        // a mutation followed by a query.
+        // The mutation is deferred until every field has been validated, so
+        // a rejected TYPE or UNTYPE leaves the session untouched like every
+        // other rejected request.
+        std::string_view args_source = tail;
+        std::string_view pending_key;
+        if (command == "TYPE") {
+            std::string_view after_key;
+            pending_key = NextToken(tail, &after_key);
+            if (pending_key.empty()) return Err("TYPE needs a key");
+            if (HasControlChar(pending_key)) {
+                return Err("key has a control character");
+            }
+            args_source = after_key;
+        }
+
         std::string_view args;
-        const std::string_view mode_text = NextToken(tail, &args);
+        const std::string_view mode_text = NextToken(args_source, &args);
         Mode mode{};
         if (!ParseMode(mode_text, &mode)) {
             return Err("mode must be severe or fuzzy");
@@ -202,6 +238,11 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
                 }
                 options.deduplicate = dedup == 1;
             }
+        }
+        if (command == "TYPE") {
+            session->push(pending_key);
+        } else if (command == "UNTYPE") {
+            session->pop();
         }
         return Ok(ToUtf8(session->candidates(mode, options)));
     }
