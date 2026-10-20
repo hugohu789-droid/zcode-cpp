@@ -70,6 +70,8 @@ if(ZCODE_BUILD_TESTS)
     add_executable(zcode_tests
         tests/test_golden.cpp
         tests/test_options.cpp
+        tests/test_protocol.cpp
+        service/protocol.cpp
         tests/test_rules.cpp
         tests/test_session.cpp
         tests/test_splice_table.cpp
@@ -81,6 +83,16 @@ if(ZCODE_BUILD_TESTS)
     target_compile_options(zcode_tests PRIVATE ${ZCODE_WARNINGS})
     include(GoogleTest)
     gtest_discover_tests(zcode_tests)
+endif()
+
+# ---- stdio service ------------------------------------------------------------
+# The engine as a separate process, so a host can use it without linking this
+# GPL-2.0-or-later code in. Protocol in service/protocol.h.
+option(ZCODE_BUILD_SERVICE "Build the stdio service" ON)
+if(ZCODE_BUILD_SERVICE)
+    add_executable(zcode_stdio service/zcode_stdio.cpp service/protocol.cpp)
+    target_link_libraries(zcode_stdio PRIVATE zcode)
+    target_compile_options(zcode_stdio PRIVATE ${ZCODE_WARNINGS})
 endif()
 
 # ---- benchmark ----------------------------------------------------------------
