@@ -56,31 +56,31 @@ TEST_F(ProtocolTest, QuitReportsAndAcknowledges) {
 
 TEST_F(ProtocolTest, PushPopAndKeysTrackTheSession) {
     bool quit = true;  // Must be cleared by a non-quit request.
-    EXPECT_EQ(Send("PUSH s", &quit), "OK");
+    EXPECT_EQ(Send("PUSH 0 s", &quit), "OK");
     EXPECT_FALSE(quit);
-    EXPECT_EQ(Send("PUSH a"), "OK");
-    EXPECT_EQ(Send("KEYS"), "OK\ts\ta");
+    EXPECT_EQ(Send("PUSH 0 a"), "OK");
+    EXPECT_EQ(Send("KEYS 0"), "OK\ts\ta");
 
-    EXPECT_EQ(Send("POP"), "OK");
-    EXPECT_EQ(Send("KEYS"), "OK\ts");
+    EXPECT_EQ(Send("POP 0"), "OK");
+    EXPECT_EQ(Send("KEYS 0"), "OK\ts");
 
-    EXPECT_EQ(Send("CLEAR"), "OK");
-    EXPECT_EQ(Send("KEYS"), "OK");
+    EXPECT_EQ(Send("CLEAR 0"), "OK");
+    EXPECT_EQ(Send("KEYS 0"), "OK");
 }
 
 TEST_F(ProtocolTest, PopOnEmptySessionIsHarmless) {
-    EXPECT_EQ(Send("POP"), "OK");
-    EXPECT_EQ(Send("KEYS"), "OK");
+    EXPECT_EQ(Send("POP 0"), "OK");
+    EXPECT_EQ(Send("KEYS 0"), "OK");
 }
 
 // The session path and the stateless path must agree, since a host uses the
 // first per keystroke and may use the second to re-check a whole word.
 TEST_F(ProtocolTest, SessionCandidatesMatchStatelessShape) {
-    Send("PUSH s");
-    Send("PUSH a");
-    Send("PUSH i");
-    Send("PUSH n");
-    const std::string from_session = Send("CAND fuzzy");
+    Send("PUSH 0 s");
+    Send("PUSH 0 a");
+    Send("PUSH 0 i");
+    Send("PUSH 0 n");
+    const std::string from_session = Send("CAND 0 fuzzy");
     const std::string from_shape = Send("SHAPE fuzzy sain");
     EXPECT_EQ(from_session, from_shape);
     EXPECT_EQ(Fields(from_session)[0], "OK");
@@ -93,18 +93,18 @@ TEST_F(ProtocolTest, BothModesAreAccepted) {
 }
 
 TEST_F(ProtocolTest, MaxCandidatesCapsTheList) {
-    Send("PUSH s");
-    Send("PUSH a");
-    const std::size_t all = Fields(Send("CAND fuzzy")).size() - 1;
+    Send("PUSH 0 s");
+    Send("PUSH 0 a");
+    const std::size_t all = Fields(Send("CAND 0 fuzzy")).size() - 1;
     ASSERT_GT(all, 2u) << "need several candidates to cap";
-    EXPECT_EQ(Fields(Send("CAND fuzzy 2")).size() - 1, 2u);
+    EXPECT_EQ(Fields(Send("CAND 0 fuzzy 2")).size() - 1, 2u);
 }
 
 TEST_F(ProtocolTest, DeduplicateFlagIsHonoured) {
-    Send("PUSH s");
-    Send("PUSH a");
-    const std::size_t plain = Fields(Send("CAND fuzzy 0 0")).size();
-    const std::size_t deduped = Fields(Send("CAND fuzzy 0 1")).size();
+    Send("PUSH 0 s");
+    Send("PUSH 0 a");
+    const std::size_t plain = Fields(Send("CAND 0 fuzzy 0 0")).size();
+    const std::size_t deduped = Fields(Send("CAND 0 fuzzy 0 1")).size();
     EXPECT_LE(deduped, plain);
 }
 
@@ -120,30 +120,30 @@ TEST_F(ProtocolTest, DecomposeReturnsSplitsAsSpaceJoinedKeys) {
 
 // A rejected request must not disturb the session, so a client can recover.
 TEST_F(ProtocolTest, ErrorsLeaveTheSessionIntact) {
-    Send("PUSH s");
-    Send("PUSH a");
-    const std::string before = Send("KEYS");
+    Send("PUSH 0 s");
+    Send("PUSH 0 a");
+    const std::string before = Send("KEYS 0");
 
     EXPECT_EQ(Fields(Send("NONSENSE"))[0], "ERR");
-    EXPECT_EQ(Fields(Send("CAND sideways"))[0], "ERR");
-    EXPECT_EQ(Fields(Send("CAND fuzzy notanumber"))[0], "ERR");
-    EXPECT_EQ(Fields(Send("CAND fuzzy 0 7"))[0], "ERR");
-    EXPECT_EQ(Fields(Send("PUSH"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("CAND 0 sideways"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("CAND 0 fuzzy notanumber"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("CAND 0 fuzzy 0 7"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("PUSH 0"))[0], "ERR");
     EXPECT_EQ(Fields(Send("SHAPE fuzzy"))[0], "ERR");
     EXPECT_EQ(Fields(Send(""))[0], "ERR");
 
-    EXPECT_EQ(Send("KEYS"), before);
+    EXPECT_EQ(Send("KEYS 0"), before);
 }
 
 // Windows clients writing in text mode send CRLF.
 TEST_F(ProtocolTest, TrailingCarriageReturnIsTolerated) {
-    EXPECT_EQ(Send("PUSH s\r"), "OK");
-    EXPECT_EQ(Send("KEYS\r"), "OK\ts");
+    EXPECT_EQ(Send("PUSH 0 s\r"), "OK");
+    EXPECT_EQ(Send("KEYS 0\r"), "OK\ts");
 }
 
 TEST_F(ProtocolTest, SurroundingWhitespaceIsTolerated) {
-    EXPECT_EQ(Send("   PUSH s   "), "OK");
-    EXPECT_EQ(Send("KEYS"), "OK\ts");
+    EXPECT_EQ(Send("   PUSH 0 s   "), "OK");
+    EXPECT_EQ(Send("KEYS 0"), "OK\ts");
 }
 
 // ZCode output must never contain the field separator, or a client could not
@@ -159,6 +159,51 @@ TEST_F(ProtocolTest, CandidatesNeverContainTabOrNewline) {
             EXPECT_EQ(fields[i].find('\r'), std::string::npos);
         }
     }
+}
+
+// A host with several input contexts needs independent sessions; the whole
+// point of the id is that one context's keys never leak into another's.
+TEST_F(ProtocolTest, SessionsAreIndependent) {
+    const std::vector<std::string> opened = Fields(Send("OPEN"));
+    ASSERT_EQ(opened[0], "OK");
+    ASSERT_EQ(opened.size(), 2u);
+    const std::string a = opened[1];
+    const std::string b = Fields(Send("OPEN"))[1];
+    EXPECT_NE(a, b);
+
+    Send("PUSH " + a + " s");
+    Send("PUSH " + b + " m");
+    EXPECT_EQ(Send("KEYS " + a), "OK	s");
+    EXPECT_EQ(Send("KEYS " + b), "OK	m");
+    EXPECT_EQ(Send("KEYS 0"), "OK");  // The implicit one is untouched.
+}
+
+TEST_F(ProtocolTest, CloseRemovesASession) {
+    const std::string id = Fields(Send("OPEN"))[1];
+    EXPECT_EQ(Send("PUSH " + id + " s"), "OK");
+    EXPECT_EQ(Send("CLOSE " + id), "OK");
+    EXPECT_EQ(Fields(Send("KEYS " + id))[0], "ERR");
+    EXPECT_EQ(Fields(Send("CLOSE " + id))[0], "ERR");
+}
+
+// Session 0 is what a single-context client and a shell one-liner rely on.
+TEST_F(ProtocolTest, SessionZeroExistsAndCannotBeClosed) {
+    EXPECT_EQ(Send("KEYS 0"), "OK");
+    EXPECT_EQ(Fields(Send("CLOSE 0"))[0], "ERR");
+    EXPECT_EQ(Send("KEYS 0"), "OK");  // Still usable.
+}
+
+TEST_F(ProtocolTest, UnknownOrMissingSessionIdIsRejected) {
+    EXPECT_EQ(Fields(Send("KEYS 9999"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("PUSH 9999 s"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("KEYS"))[0], "ERR");        // id omitted
+    EXPECT_EQ(Fields(Send("KEYS notanid"))[0], "ERR");
+}
+
+// SHAPE and DECOMPOSE are stateless and must not require an id.
+TEST_F(ProtocolTest, StatelessCommandsTakeNoSessionId) {
+    EXPECT_EQ(Fields(Send("SHAPE fuzzy sain"))[0], "OK");
+    EXPECT_EQ(Fields(Send("DECOMPOSE sain"))[0], "OK");
 }
 
 }  // namespace

@@ -3,6 +3,8 @@
 #include "protocol.h"
 
 #include <charconv>
+#include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -86,9 +88,18 @@ std::vector<std::string> ToUtf8(const std::vector<ZString>& candidates) {
 }  // namespace
 
 struct Protocol::State {
-    explicit State(const Engine& e) : engine(e), session(e) {}
+    explicit State(const Engine& e) : engine(e) {
+        sessions.emplace(0, Session(e));  // Session 0 always exists.
+    }
     const Engine& engine;
-    Session session;
+    std::map<std::uint64_t, Session> sessions;
+    std::uint64_t next_id = 1;
+
+    // Null when `id` names no live session.
+    Session* find(std::uint64_t id) {
+        const auto it = sessions.find(id);
+        return it == sessions.end() ? nullptr : &it->second;
+    }
 };
 
 Protocol::Protocol(const Engine& engine)
@@ -109,46 +120,78 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
         return "OK";
     }
 
-    if (command == "PUSH") {
-        // One key per request: a key may be several characters ("ng"), so it
-        // is taken verbatim rather than split further.
-        if (rest.empty()) return Err("PUSH needs a key");
-        state_->session.push(rest);
-        return "OK";
+    if (command == "OPEN") {
+        const std::uint64_t id = state_->next_id++;
+        state_->sessions.emplace(id, Session(state_->engine));
+        return Ok({std::to_string(id)});
     }
 
-    if (command == "POP") {
-        state_->session.pop();
-        return "OK";
-    }
-
-    if (command == "CLEAR") {
-        state_->session.clear();
-        return "OK";
-    }
-
-    if (command == "KEYS") {
-        return Ok(state_->session.keys());
-    }
-
-    if (command == "CAND" || command == "SHAPE") {
+    if (command == "SHAPE") {
         std::string_view tail;
         const std::string_view mode_text = NextToken(rest, &tail);
         Mode mode{};
         if (!ParseMode(mode_text, &mode)) {
             return Err("mode must be severe or fuzzy");
         }
+        if (tail.empty()) return Err("SHAPE needs a latin string");
+        return Ok(ToUtf8(state_->engine.shape(tail, mode)));
+    }
 
-        if (command == "SHAPE") {
-            if (tail.empty()) return Err("SHAPE needs a latin string");
-            return Ok(ToUtf8(state_->engine.shape(tail, mode)));
+    // Everything below is session-scoped and takes an id first.
+    if (command == "CLOSE" || command == "PUSH" || command == "POP" ||
+        command == "CLEAR" || command == "KEYS" || command == "CAND") {
+        std::string_view tail;
+        const std::string_view id_text = NextToken(rest, &tail);
+        std::size_t id = 0;
+        if (!ParseUnsigned(id_text, &id)) {
+            return Err("expected a session id");
+        }
+        Session* session = state_->find(id);
+        if (session == nullptr) return Err("unknown session");
+
+        if (command == "CLOSE") {
+            // Session 0 is the implicit one; closing it would leave a
+            // single-context client with nothing to talk to.
+            if (id == 0) return Err("cannot close session 0");
+            state_->sessions.erase(id);
+            return "OK";
         }
 
-        // CAND: optional max and dedup, in that order.
+        if (command == "PUSH") {
+            // One key per request: a key may be several characters ("ng"), so
+            // it is taken verbatim rather than split further.
+            if (tail.empty()) return Err("PUSH needs a key");
+            session->push(tail);
+            return "OK";
+        }
+
+        if (command == "POP") {
+            session->pop();
+            return "OK";
+        }
+
+        if (command == "CLEAR") {
+            session->clear();
+            return "OK";
+        }
+
+        if (command == "KEYS") {
+            return Ok(session->keys());
+        }
+
+        // CAND
+        std::string_view args;
+        const std::string_view mode_text = NextToken(tail, &args);
+        Mode mode{};
+        if (!ParseMode(mode_text, &mode)) {
+            return Err("mode must be severe or fuzzy");
+        }
+
+        // Optional max and dedup, in that order.
         Options options;
-        if (!tail.empty()) {
+        if (!args.empty()) {
             std::string_view flags;
-            const std::string_view max_text = NextToken(tail, &flags);
+            const std::string_view max_text = NextToken(args, &flags);
             if (!ParseUnsigned(max_text, &options.max_candidates)) {
                 return Err("max must be a non-negative integer");
             }
@@ -160,7 +203,7 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
                 options.deduplicate = dedup == 1;
             }
         }
-        return Ok(ToUtf8(state_->session.candidates(mode, options)));
+        return Ok(ToUtf8(session->candidates(mode, options)));
     }
 
     if (command == "DECOMPOSE") {
