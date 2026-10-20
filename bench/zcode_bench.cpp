@@ -51,8 +51,14 @@ void run(const char* name, int reps, const std::function<void(Checksum&)>& body)
 
 int main(int argc, char** argv) {
     int reps = argc > 1 ? std::max(1, std::atoi(argv[1])) : 7;
+    // startup: load the embedded tables, build the engine, first result
+    auto t_start = std::chrono::steady_clock::now();
     auto engine = zcode::Engine::create();
     if (!engine) return 1;
+    auto first = engine->shape("mongol", zcode::Mode::severe);
+    std::printf("startup to first result  %.2f ms (process start not included; %zu candidate)\n",
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count(),
+                first.size());
 
     std::vector<std::vector<std::string>> key_lists;
     for (const auto& r : zcode::test::read_tsv("golden_splice.tsv")) {

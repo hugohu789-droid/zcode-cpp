@@ -33,6 +33,7 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <ime.java.src>${project.basedir}/../../../ime-java/src/main/java</ime.java.src>
+        <golden.main>zcodecpp.golden.GoldenDump</golden.main>
         <!-- variant-specific: the patch sources and the original files they replace -->
         <golden.variant.src>${project.basedir}/src/patches/java</golden.variant.src>
         <golden.replaced.1>com/zorigt/ime/letter/splice/front/FrontLikeTailOrhichE.java</golden.replaced.1>
@@ -152,7 +153,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.5.0</version>
                 <configuration>
-                    <mainClass>zcodecpp.golden.GoldenDump</mainClass>
+                    <mainClass>${golden.main}</mainClass>
                 </configuration>
             </plugin>
         </plugins>
