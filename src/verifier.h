@@ -8,10 +8,13 @@
 
 namespace zcode {
 
-// Verifier.canFuzzySplicing(lss, ls)
-bool can_fuzzy_splicing(const Tables& tables, const LetterShapeSequence& lss, const LetterShape& ls);
+// Verifier.canFuzzySplicing(lss, ls). Only lss.state() matters.
+bool can_fuzzy_splicing(const Tables& tables, const FrontState& lss, const LetterShape& ls);
 
-// Verifier.canSevereSplicing(lss, ls)
-bool can_severe_splicing(const Tables& tables, const LetterShapeSequence& lss, const LetterShape& ls);
+// Verifier.canSevereSplicing(lss, ls). Only lss.state() matters.
+bool can_severe_splicing(const Tables& tables, const FrontState& lss, const LetterShape& ls);
+
+// The splicer does not call these per candidate: SpliceTable evaluates them
+// once for every (state, shape) pair (see splice_table.h).
 
 }  // namespace zcode

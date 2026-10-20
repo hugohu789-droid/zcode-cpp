@@ -7,28 +7,28 @@
 
 namespace zcode {
 
-bool match_front(const Tables& tables, RuleId id, const LetterShapeSequence& lss) {
+bool match_front(const Tables& tables, RuleId id, const FrontState& lss) {
     const Rule& rule = tables.rules[id];
     switch (rule.kind) {
         case RuleKind::front_empty:  // FrontEmpty
-            return lss.empty();
+            return lss.empty;
         case RuleKind::front_not_empty:  // FrontNotEmpty
-            return !lss.empty();
+            return !lss.empty;
         case RuleKind::last_in:  // FrontLikeTail*, FrontLikeMiddleII, FrontIsMiddleSD
-            return !lss.empty() && rule.members[tables.shapes[lss.last()].equals_class];
+            return !lss.empty && rule.members[tables.shapes[lss.last].equals_class];
         case RuleKind::last_not_in:  // FrontLikeMiddle{A,E,I,O}, FrontLikeTailBanbvrBaga(U), FrontIsNotMiddleSD
-            return !lss.empty() && !rule.members[tables.shapes[lss.last()].equals_class];
+            return !lss.empty && !rule.members[tables.shapes[lss.last].equals_class];
         case RuleKind::last_at_not_in: {  // FrontLikeMiddleGedes(Silbi)U, FrontTailGedesSuul1U
-            if (lss.empty()) return false;
-            const LetterShape& last = tables.shapes[lss.last()];
+            if (lss.empty) return false;
+            const LetterShape& last = tables.shapes[lss.last];
             return last.location == rule.location && !rule.members[last.equals_class];
         }
         case RuleKind::nature_is:  // FrontIsChigaSequence
-            return !lss.empty() && lss.nature() == rule.nature;
+            return !lss.empty && lss.nature == rule.nature;
         case RuleKind::nature_is_not:  // FrontIsNotChigaSequence
-            return !lss.empty() && lss.nature() != rule.nature;
+            return !lss.empty && lss.nature != rule.nature;
         case RuleKind::negation:  // FrontLikeTailHvmsI
-            return !lss.empty() && !match_front(tables, rule.inner, lss);
+            return !lss.empty && !match_front(tables, rule.inner, lss);
         default:
             return false;  // behind kinds never reach here (rejected by the loader)
     }

@@ -12,8 +12,12 @@
 
 namespace zcode {
 
-// SplicingAtFrontRule.match(lss)
-bool match_front(const Tables& tables, RuleId rule, const LetterShapeSequence& lss);
+// SplicingAtFrontRule.match(lss). Every front rule looks only at whether lss
+// is empty, at its last shape and at its nature, i.e. at FrontState.
+bool match_front(const Tables& tables, RuleId rule, const FrontState& lss);
+inline bool match_front(const Tables& tables, RuleId rule, const LetterShapeSequence& lss) {
+    return match_front(tables, rule, lss.state());
+}
 
 // SplicingAtBehindRule.match(ls); next == nullptr stands for a null argument.
 bool match_behind(const Tables& tables, RuleId rule, const LetterShape* next);

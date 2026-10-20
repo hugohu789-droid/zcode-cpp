@@ -4,9 +4,9 @@
 // are two copies of one loop in Java; they differ only in the shapes taken for
 // the last key and in the Verifier method, so they share one template here.
 // The per-rejection logging and timing of the original are not ported.
+// Verifier checks go through the precomputed SpliceTable.
 #include "letter_splicer.h"
 
-#include "verifier.h"
 
 namespace zcode {
 
@@ -39,12 +39,9 @@ std::vector<LetterShapeSequence> LetterSplicer::splice(std::span<const std::stri
         // empty again, and splicing restarts from the empty sequence, exactly
         // as in Java.
         if (complete_lss_list.empty()) {
-            const LetterShapeSequence empty_lss;
             for (ShapeId id : letter_shape_list) {
                 const LetterShape& letter_shape = tables_.shapes[id];
-                bool ok = Fuzzy ? can_fuzzy_splicing(tables_, empty_lss, letter_shape)
-                                : can_severe_splicing(tables_, empty_lss, letter_shape);
-                if (ok) {
+                if (verifier_.can_splice<Fuzzy>(FrontState{}, id)) {
                     LetterShapeSequence lss;
                     lss.append(letter_shape);
                     new_whole_lss_list.push_back(std::move(lss));
@@ -54,9 +51,7 @@ std::vector<LetterShapeSequence> LetterSplicer::splice(std::span<const std::stri
             for (ShapeId id : letter_shape_list) {
                 const LetterShape& letter_shape = tables_.shapes[id];
                 for (const LetterShapeSequence& clss : complete_lss_list) {
-                    bool ok = Fuzzy ? can_fuzzy_splicing(tables_, clss, letter_shape)
-                                    : can_severe_splicing(tables_, clss, letter_shape);
-                    if (ok) {
+                    if (verifier_.can_splice<Fuzzy>(clss.state(), id)) {
                         LetterShapeSequence lss;
                         lss.append(clss, tables_);
                         lss.append(letter_shape);

@@ -12,6 +12,7 @@
 #include "key_filter.h"
 #include "keyboard_layout.h"
 #include "letter_splicer.h"
+#include "splice_table.h"
 #include "strings.h"
 #include "tables.h"
 
@@ -19,13 +20,19 @@ namespace zcode {
 
 struct Engine::Impl {
     explicit Impl(Tables t)
-        : tables(std::move(t)), layout(tables), decomposer(layout.keys()), splicer(tables, layout), filters(tables) {}
+        : tables(std::move(t)),
+          layout(tables),
+          decomposer(layout.keys()),
+          verifier(tables),
+          splicer(tables, layout, verifier),
+          filters(tables) {}
     Impl(const Impl&) = delete;
     Impl& operator=(const Impl&) = delete;
 
     Tables tables;
     KeyboardLayout layout;
     Decomposer decomposer;
+    SpliceTable verifier;
     LetterSplicer splicer;
     KeyFilterFactory filters;
 

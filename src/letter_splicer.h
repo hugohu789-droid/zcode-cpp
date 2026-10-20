@@ -9,13 +9,15 @@
 
 #include "keyboard_layout.h"
 #include "letter_shape_sequence.h"
+#include "splice_table.h"
 #include "tables.h"
 
 namespace zcode {
 
 class LetterSplicer {
 public:
-    LetterSplicer(const Tables& tables, const KeyboardLayout& layout) : tables_(tables), layout_(layout) {}
+    LetterSplicer(const Tables& tables, const KeyboardLayout& layout, const SpliceTable& verifier)
+        : tables_(tables), layout_(layout), verifier_(verifier) {}
 
     // LetterSplicer.fuzzy(latinSequence): first key HEAD, middle keys MIDDLE,
     // last key MIDDLE then TAIL; fuzzy rules.
@@ -31,6 +33,7 @@ private:
 
     const Tables& tables_;
     const KeyboardLayout& layout_;
+    const SpliceTable& verifier_;
 };
 
 }  // namespace zcode
