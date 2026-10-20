@@ -3,6 +3,8 @@
 // Engine::Impl, shared by engine.cpp and session.cpp.
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <utility>
@@ -36,13 +38,28 @@ struct Engine::Impl {
     LetterSplicer splicer;
     KeyFilterFactory filters;
 
-    std::vector<ZString> splice(std::span<const std::string> keys, Mode mode) const {
+    // Materialises `layer` into `out` in order, honouring Options. Returns
+    // false once out is full (max_candidates reached).
+    bool collect(const std::vector<SpliceNode>& nodes, const std::vector<std::uint32_t>& layer,
+                 const Options& options, std::vector<ZString>& out) const {
+        std::size_t room = layer.size();
+        if (options.max_candidates != 0) {
+            room = std::min(room, options.max_candidates > out.size() ? options.max_candidates - out.size() : 0);
+        }
+        out.reserve(out.size() + room);
+        for (std::uint32_t node : layer) {
+            if (options.max_candidates != 0 && out.size() >= options.max_candidates) {
+                return false;
+            }
+            out.push_back(materialize(nodes, node, tables));
+        }
+        return options.max_candidates == 0 || out.size() < options.max_candidates;
+    }
+
+    std::vector<ZString> splice(std::span<const std::string> keys, Mode mode, const Options& options) const {
         SpliceResult r = mode == Mode::severe ? splicer.severe(keys) : splicer.fuzzy(keys);
         std::vector<ZString> out;
-        out.reserve(r.size());
-        for (std::size_t i = 0; i < r.size(); ++i) {
-            out.push_back(r.to_zstring(i, tables));
-        }
+        collect(r.nodes, r.candidates, options, out);
         return out;
     }
 };

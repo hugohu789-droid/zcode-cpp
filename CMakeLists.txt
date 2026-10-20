@@ -69,6 +69,7 @@ if(ZCODE_BUILD_TESTS)
 
     add_executable(zcode_tests
         tests/test_golden.cpp
+        tests/test_options.cpp
         tests/test_rules.cpp
         tests/test_session.cpp
         tests/test_splice_table.cpp

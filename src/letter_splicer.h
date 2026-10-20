@@ -63,6 +63,11 @@ public:
     void step(std::vector<SpliceNode>& nodes, const std::vector<std::uint32_t>& current,
               std::span<const ShapeId> shapes, std::vector<std::uint32_t>& next) const;
 
+    // splice(...).size() without building candidates: the same loop over
+    // per-state counts, since the rules see only (last shape, nature).
+    template <bool Fuzzy>
+    std::uint64_t count(std::span<const std::string> latin_sequence) const;
+
 private:
     template <bool Fuzzy>
     SpliceResult splice(std::span<const std::string> latin_sequence) const;

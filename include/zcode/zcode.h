@@ -25,6 +25,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
@@ -42,6 +43,13 @@ enum class Mode {
     fuzzy,   // LetterSplicer.fuzzy(): relaxed rules, last letter medial or final (prefix search)
 };
 
+// Output options. The defaults reproduce the Java original exactly.
+struct Options {
+    // Return at most this many candidates: the first ones in the original
+    // order. 0 = no limit (the original's behaviour). Not in the original.
+    std::size_t max_candidates = 0;
+};
+
 class Engine {
 public:
     // Builds an engine from the data tables embedded at build time. Returns
@@ -56,14 +64,19 @@ public:
     // Latin input -> ZCode candidates, in the order the Java original yields
     // them. Blank input yields nothing; otherwise the input is decomposed into
     // key sequences and every sequence is spliced, results concatenated.
-    std::vector<ZString> shape(std::string_view latin, Mode mode) const;
+    std::vector<ZString> shape(std::string_view latin, Mode mode, const Options& options = {}) const;
 
     // Same as shape(), each candidate encoded as UTF-8.
-    std::vector<std::string> shape_utf8(std::string_view latin, Mode mode) const;
+    std::vector<std::string> shape_utf8(std::string_view latin, Mode mode, const Options& options = {}) const;
 
     // LetterSplicer.severe()/fuzzy() on an explicit key sequence. Unknown keys
     // and keys without a shape at their position are skipped, as in Java.
-    std::vector<ZString> splice(std::span<const std::string> keys, Mode mode) const;
+    std::vector<ZString> splice(std::span<const std::string> keys, Mode mode, const Options& options = {}) const;
+
+    // The number of candidates splice(keys, mode) returns, computed without
+    // building them (dynamic programming over splicing states); saturates at
+    // UINT64_MAX. Useful to decide on max_candidates first.
+    std::uint64_t count(std::span<const std::string> keys, Mode mode) const;
 
     // Decomposer.decompose(): every way of splitting the input into layout keys.
     std::vector<std::vector<std::string>> decompose(std::string_view latin) const;
@@ -100,7 +113,7 @@ public:
     const std::vector<std::string>& keys() const;
 
     // The candidates for keys(), in the same order as Engine::splice().
-    std::vector<ZString> candidates(Mode mode);
+    std::vector<ZString> candidates(Mode mode, const Options& options = {});
 
 private:
     struct State;

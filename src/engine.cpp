@@ -28,29 +28,34 @@ Engine::Engine(Engine&&) noexcept = default;
 Engine& Engine::operator=(Engine&&) noexcept = default;
 Engine::~Engine() = default;
 
-std::vector<ZString> Engine::shape(std::string_view latin, Mode mode) const {
+std::vector<ZString> Engine::shape(std::string_view latin, Mode mode, const Options& options) const {
     std::vector<ZString> out;
     if (is_blank(latin)) {
         return out;
     }
     for (const std::vector<std::string>& keys : impl_->decomposer.decompose(latin)) {
-        for (ZString& z : impl_->splice(keys, mode)) {
-            out.push_back(std::move(z));
+        SpliceResult r = mode == Mode::severe ? impl_->splicer.severe(keys) : impl_->splicer.fuzzy(keys);
+        if (!impl_->collect(r.nodes, r.candidates, options, out)) {
+            break;
         }
     }
     return out;
 }
 
-std::vector<std::string> Engine::shape_utf8(std::string_view latin, Mode mode) const {
+std::vector<std::string> Engine::shape_utf8(std::string_view latin, Mode mode, const Options& options) const {
     std::vector<std::string> out;
-    for (const ZString& z : shape(latin, mode)) {
+    for (const ZString& z : shape(latin, mode, options)) {
         out.push_back(to_utf8(z));
     }
     return out;
 }
 
-std::vector<ZString> Engine::splice(std::span<const std::string> keys, Mode mode) const {
-    return impl_->splice(keys, mode);
+std::vector<ZString> Engine::splice(std::span<const std::string> keys, Mode mode, const Options& options) const {
+    return impl_->splice(keys, mode, options);
+}
+
+std::uint64_t Engine::count(std::span<const std::string> keys, Mode mode) const {
+    return mode == Mode::severe ? impl_->splicer.count<false>(keys) : impl_->splicer.count<true>(keys);
 }
 
 std::vector<std::vector<std::string>> Engine::decompose(std::string_view latin) const {

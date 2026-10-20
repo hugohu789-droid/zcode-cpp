@@ -108,5 +108,16 @@ int main(int argc, char** argv) {
     run("heavy_fuzzy", reps, [&](Checksum& c) {
         for (const auto& w : heavy) c.add(engine->shape(w, zcode::Mode::fuzzy));
     });
+    // Output options (not in the original): first 100 candidates only, and
+    // counting without building candidates.
+    zcode::Options cap100;
+    cap100.max_candidates = 100;
+    run("heavy_fuzzy_cap100", reps, [&](Checksum& c) {
+        for (const auto& w : heavy) c.add(engine->shape(w, zcode::Mode::fuzzy, cap100));
+    });
+    run("count_heavy_fuzzy", reps, [&](Checksum& c) {
+        for (const auto& w : heavy)
+            for (const auto& k : engine->decompose(w)) c.candidates += engine->count(k, zcode::Mode::fuzzy);
+    });
     return 0;
 }

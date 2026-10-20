@@ -87,6 +87,51 @@ template void LetterSplicer::step<false>(std::vector<SpliceNode>&, const std::ve
                                          std::span<const ShapeId>, std::vector<std::uint32_t>&) const;
 
 template <bool Fuzzy>
+std::uint64_t LetterSplicer::count(std::span<const std::string> latin_sequence) const {
+    // counts[state] for state = last * 3 + nature; total == 0 means the layer
+    // is empty (initially, or after every candidate was rejected).
+    const std::size_t states = tables_.shapes.size() * 3;
+    std::vector<std::uint64_t> counts(states, 0), next(states, 0);
+    std::uint64_t total = 0;
+    auto add = [](std::uint64_t a, std::uint64_t b) { return a > UINT64_MAX - b ? UINT64_MAX : a + b; };
+    for (std::size_t i = 0; i < latin_sequence.size(); ++i) {
+        std::span<const ShapeId> shapes = shapes_for(latin_sequence[i], i, latin_sequence.size(), Fuzzy);
+        if (shapes.empty()) {
+            continue;  // Java: `continue`
+        }
+        std::fill(next.begin(), next.end(), 0);
+        std::uint64_t next_total = 0;
+        for (ShapeId id : shapes) {
+            Nature own = shape_nature_[id];
+            if (total == 0) {  // restart from the empty sequence
+                if (verifier_.can_splice<Fuzzy>(FrontState{}, id)) {
+                    std::size_t s = static_cast<std::size_t>(id) * 3 + static_cast<std::size_t>(own);
+                    next[s] = add(next[s], 1);
+                    next_total = add(next_total, 1);
+                }
+                continue;
+            }
+            for (std::size_t st = 0; st < states; ++st) {
+                if (counts[st] == 0) continue;
+                FrontState fs{false, static_cast<ShapeId>(st / 3), static_cast<Nature>(st % 3)};
+                if (verifier_.can_splice<Fuzzy>(fs, id)) {
+                    Nature n = own == Nature::saarmag ? fs.nature : own;
+                    std::size_t s = static_cast<std::size_t>(id) * 3 + static_cast<std::size_t>(n);
+                    next[s] = add(next[s], counts[st]);
+                    next_total = add(next_total, counts[st]);
+                }
+            }
+        }
+        counts.swap(next);
+        total = next_total;
+    }
+    return total;
+}
+
+template std::uint64_t LetterSplicer::count<true>(std::span<const std::string>) const;
+template std::uint64_t LetterSplicer::count<false>(std::span<const std::string>) const;
+
+template <bool Fuzzy>
 SpliceResult LetterSplicer::splice(std::span<const std::string> latin_sequence) const {
     SpliceResult result;
     std::vector<std::uint32_t> next;

@@ -43,7 +43,7 @@ struct Session::State {
     }
 
     template <bool Fuzzy>
-    std::vector<ZString> candidates() {
+    std::vector<ZString> candidates(const Options& options) {
         Track& t = tracks[Fuzzy ? 1 : 0];
         std::vector<ZString> out;
         const std::size_t n = keys.size();
@@ -52,15 +52,14 @@ struct Session::State {
         }
         if (n == 1) {  // the only key is the first one: HEAD shapes, i.e. frontiers[0]
             advance<Fuzzy>(t, 1);
-            for (std::uint32_t node : t.frontiers[0]) out.push_back(materialize(t.nodes, node, engine->tables));
+            engine->collect(t.nodes, t.frontiers[0], options, out);
             return out;
         }
         advance<Fuzzy>(t, n - 1);
         const std::size_t mark = t.nodes.size();
         engine->splicer.step<Fuzzy>(t.nodes, t.frontiers[n - 2],
                                     engine->splicer.shapes_for(keys[n - 1], n - 1, n, Fuzzy), t.scratch);
-        out.reserve(t.scratch.size());
-        for (std::uint32_t node : t.scratch) out.push_back(materialize(t.nodes, node, engine->tables));
+        engine->collect(t.nodes, t.scratch, options, out);
         t.nodes.resize(mark);  // the last-key layer is not reused
         return out;
     }
@@ -96,8 +95,8 @@ void Session::clear() {
 
 const std::vector<std::string>& Session::keys() const { return state_->keys; }
 
-std::vector<ZString> Session::candidates(Mode mode) {
-    return mode == Mode::severe ? state_->candidates<false>() : state_->candidates<true>();
+std::vector<ZString> Session::candidates(Mode mode, const Options& options) {
+    return mode == Mode::severe ? state_->candidates<false>(options) : state_->candidates<true>(options);
 }
 
 }  // namespace zcode
