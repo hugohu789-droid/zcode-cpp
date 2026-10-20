@@ -33,9 +33,10 @@ std::vector<ZString> Engine::shape(std::string_view latin, Mode mode, const Opti
     if (is_blank(latin)) {
         return out;
     }
+    Engine::Impl::Seen seen = Engine::Impl::make_seen(options);
     for (const std::vector<std::string>& keys : impl_->decomposer.decompose(latin)) {
         SpliceResult r = mode == Mode::severe ? impl_->splicer.severe(keys) : impl_->splicer.fuzzy(keys);
-        if (!impl_->collect(r.nodes, r.candidates, options, out)) {
+        if (!impl_->collect(r.nodes, r.candidates, options, out, seen)) {
             break;
         }
     }

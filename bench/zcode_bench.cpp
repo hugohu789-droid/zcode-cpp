@@ -115,6 +115,11 @@ int main(int argc, char** argv) {
     run("heavy_fuzzy_cap100", reps, [&](Checksum& c) {
         for (const auto& w : heavy) c.add(engine->shape(w, zcode::Mode::fuzzy, cap100));
     });
+    zcode::Options dedupe;
+    dedupe.deduplicate = true;
+    run("splice_all_fuzzy_dedup", reps, [&](Checksum& c) {
+        for (const auto& k : key_lists) c.add(engine->splice(k, zcode::Mode::fuzzy, dedupe));
+    });
     run("count_heavy_fuzzy", reps, [&](Checksum& c) {
         for (const auto& w : heavy)
             for (const auto& k : engine->decompose(w)) c.candidates += engine->count(k, zcode::Mode::fuzzy);

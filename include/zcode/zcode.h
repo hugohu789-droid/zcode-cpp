@@ -48,6 +48,11 @@ struct Options {
     // Return at most this many candidates: the first ones in the original
     // order. 0 = no limit (the original's behaviour). Not in the original.
     std::size_t max_candidates = 0;
+    // Drop every candidate whose ZCode equals an earlier one, keeping the
+    // first occurrence (stable). Duplicates arise when different shapes have
+    // the same components (e.g. both G "double achvg" medials, or t/d heads).
+    // max_candidates then counts distinct candidates. Not in the original.
+    bool deduplicate = false;
 };
 
 class Engine {

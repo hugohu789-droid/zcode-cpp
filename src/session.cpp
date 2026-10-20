@@ -46,20 +46,21 @@ struct Session::State {
     std::vector<ZString> candidates(const Options& options) {
         Track& t = tracks[Fuzzy ? 1 : 0];
         std::vector<ZString> out;
+        Engine::Impl::Seen seen = Engine::Impl::make_seen(options);
         const std::size_t n = keys.size();
         if (n == 0) {
             return out;
         }
         if (n == 1) {  // the only key is the first one: HEAD shapes, i.e. frontiers[0]
             advance<Fuzzy>(t, 1);
-            engine->collect(t.nodes, t.frontiers[0], options, out);
+            engine->collect(t.nodes, t.frontiers[0], options, out, seen);
             return out;
         }
         advance<Fuzzy>(t, n - 1);
         const std::size_t mark = t.nodes.size();
         engine->splicer.step<Fuzzy>(t.nodes, t.frontiers[n - 2],
                                     engine->splicer.shapes_for(keys[n - 1], n - 1, n, Fuzzy), t.scratch);
-        engine->collect(t.nodes, t.scratch, options, out);
+        engine->collect(t.nodes, t.scratch, options, out, seen);
         t.nodes.resize(mark);  // the last-key layer is not reused
         return out;
     }
