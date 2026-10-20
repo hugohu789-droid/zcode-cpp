@@ -51,11 +51,27 @@ s.pop();  // backspace
 ```
 
 `zcode::Options` (all off by default; the defaults reproduce the Java
-original exactly): `max_candidates` keeps only the first N candidates in the
+original, apart from the two bug fixes below): `max_candidates` keeps only the first N candidates in the
 original order, `deduplicate` drops repeated ZCode strings keeping the first.
 
 No globals, no singletons, no I/O inside the algorithm. Candidates are
-returned in the same order as the Java original.
+returned in the same order as the Java original (see the deviations below).
+
+## Deviations from the Java original
+
+Two bugs of the original are fixed (everything else, including its other
+quirks, is reproduced exactly):
+
+1. After a key at which every candidate was rejected, the original restarted
+   splicing from the empty sequence and returned fragments of the word's tail.
+   Here the result stays empty. Keys without shapes at their position are
+   still skipped, as in the original.
+2. `FRONT_LIKE_TAIL_ORHICH_E` listed `mMiddleHurbelge` instead of
+   `mMiddleAchvg`, so "...m e" could never end in m-achvg + e-orhich.
+
+The golden data is generated from the original with the same two fixes
+applied (`tools/golden-java/src/patches/`); `-Poriginal` regenerates it from
+the unmodified original.
 
 ## Build and test
 
@@ -77,6 +93,8 @@ override with `-Dime.java.src=...`) without Spring or a database:
 ```bash
 mvn -q -f tools/golden-java/pom.xml compile exec:java -Dexec.args=testdata
 ```
+
+Add `-Poriginal` (and another output directory) for the unpatched original.
 
 ## Layout
 

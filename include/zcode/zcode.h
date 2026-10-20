@@ -43,7 +43,8 @@ enum class Mode {
     fuzzy,   // LetterSplicer.fuzzy(): relaxed rules, last letter medial or final (prefix search)
 };
 
-// Output options. The defaults reproduce the Java original exactly.
+// Output options. The defaults reproduce the Java original, apart from the
+// two bug fixes listed in README.md ("Deviations from the Java original").
 struct Options {
     // Return at most this many candidates: the first ones in the original
     // order. 0 = no limit (the original's behaviour). Not in the original.

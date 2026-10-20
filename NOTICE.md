@@ -19,7 +19,11 @@ controllers and the approximate-matching code were not.
 
 The data tables in `data/` are transcriptions of the Java classes named in
 their headers. The golden files in `testdata/` were produced by running the
-original Java code (see `tools/golden-java/`).
+original Java code (see `tools/golden-java/`) with two bug fixes applied:
+`tools/golden-java/src/patches/` contains modified copies of the original
+`LetterSplicer` and `FrontLikeTailOrhichE` (GPL, by Zorigt), each header
+describing its change. The same fixes are made in the C++ port and listed in
+`README.md` under "Deviations from the Java original".
 
 ## ZCode font
 
