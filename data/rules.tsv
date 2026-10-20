@@ -6,6 +6,9 @@
 # appended (next). Set membership uses LetterShape.equals(), i.e. (latin_key, zcode, location)
 # value equality, not identity. Shapes are named letter.field as in shapes.tsv.
 #
+# Deviation from the Java original (bug fix, mirrored in tools/golden-java/src/patches):
+#   FRONT_LIKE_TAIL_ORHICH_E lists M.mMiddleAchvg where the original has M.mMiddleHurbelge.
+#
 # kinds
 #   front_empty                 lss is empty
 #   front_not_empty             lss is not empty
@@ -29,7 +32,7 @@ FRONT_LIKE_TAIL_ORHICH_A	front	last_in	A.aHead A.aMiddle I.iHead I.iMiddle O.oHe
 FRONT_LIKE_TAIL_CHACHILGA_A	front	last_in	O.oMiddleBanbvrBaga N.nMiddleNOrhich H.hMiddleAgsilga G.gMiddleDvsaltaiAgsilga G.gMiddleAgsilga M.mMiddleHurbelge L.lMiddleHurbelge Y.yMiddleHvms R.rMiddleSuul	FrontLikeTailChachilgaA
 FRONT_LIKE_TAIL_VRVGSILGA_A	front	last_in	B.bHeadBanbvrBaga B.bMiddleBanbvrBaga P.pHeadChihiBaga P.pMiddleChihiBaga F.fHeadChihiBaga F.fMiddleChihiBaga K.kHeadBaga K.kMiddleBaga	FrontLikeTailVrvgsilgaA
 FRONT_LIKE_MIDDLE_E	front	last_not_in	B.bHeadBanbvrIh B.bMiddleBanbvrIh P.pHeadChihiIh P.pMiddleChihiIh H.hHeadHunhur H.hHeadHanhar H.hMiddleHunhur H.hMiddleDoubleAchvg G.gHeadHanhar G.gHeadHunhur G.gMiddleHunhur G.gMiddleDoubleAchvg G.gMiddleDoubleNAchvg F.fHeadChihiIh F.fMiddleChihiIh K.kHeadIh K.kMiddleIh	FrontLikeMiddleE
-FRONT_LIKE_TAIL_ORHICH_E	front	last_in	E.eHead E.eMiddle I.iHead I.iMiddle U.uHead U.uMiddleGedesSilbi U.uMiddleGedes N.nHead N.nMiddleNAchvg M.mHead M.mMiddleHurbelge L.lHead L.lMiddleAchvg S.sHead S.sMiddle X.xHead X.xMidddle T.tHead T.tMiddleDSenj D.dHeadDSenj D.dMiddleDSenj Q.qHead Q.qMiddle J.jHead J.jMiddle Y.yHead Y.yMiddleErtegerSilbi R.rHead R.rMiddleErbgeljinSilbi W.wHead W.wMiddle C.cHead C.cMiddle Z.zHead Z.zMiddle GALIG_H.galigHHead GALIG_H.galigHMiddle GALIG_R.galigRHead GALIG_L.galigLHead GALIG_ZH.galigZhHead GALIG_CH.galigChHead	FrontLikeTailOrhichE
+FRONT_LIKE_TAIL_ORHICH_E	front	last_in	E.eHead E.eMiddle I.iHead I.iMiddle U.uHead U.uMiddleGedesSilbi U.uMiddleGedes N.nHead N.nMiddleNAchvg M.mHead M.mMiddleAchvg L.lHead L.lMiddleAchvg S.sHead S.sMiddle X.xHead X.xMidddle T.tHead T.tMiddleDSenj D.dHeadDSenj D.dMiddleDSenj Q.qHead Q.qMiddle J.jHead J.jMiddle Y.yHead Y.yMiddleErtegerSilbi R.rHead R.rMiddleErbgeljinSilbi W.wHead W.wMiddle C.cHead C.cMiddle Z.zHead Z.zMiddle GALIG_H.galigHHead GALIG_H.galigHMiddle GALIG_R.galigRHead GALIG_L.galigLHead GALIG_ZH.galigZhHead GALIG_CH.galigChHead	FrontLikeTailOrhichE
 FRONT_LIKE_TAIL_CHACHILGA_E	front	last_in	N.nMiddleNOrhich G.gMiddleDvsaltaiAgsilga M.mMiddleHurbelge L.lMiddleHurbelge Y.yMiddleHvms R.rMiddleSuul	FrontLikeTailChachilgaE
 FRONT_LIKE_TAIL_VRVGSILGA_E	front	last_in	B.bHeadBanbvrBaga B.bMiddleBanbvrBaga P.pHeadChihiBaga P.pMiddleChihiBaga H.hHeadHinhir H.hMiddleHinhir F.fHeadChihiBaga F.fMiddleChihiBaga K.kHeadBaga K.kMiddleBaga	FrontLikeTailVrvgsilgaE
 FRONT_LIKE_MIDDLE_I	front	last_not_in	A.aHead A.aMiddle E.eHead E.eMiddle O.oHeadTitemGedes O.oMiddleGedes U.uMiddleGedes B.bHeadBanbvrIh B.bMiddleBanbvrIh P.pHeadChihiIh P.pMiddleChihiIh H.hHeadHunhur H.hHeadHanhar H.hMiddleHunhur H.hMiddleDoubleAchvg G.gHeadHanhar G.gHeadHunhur G.gMiddleHunhur G.gMiddleDoubleAchvg G.gMiddleDoubleNAchvg F.fHeadChihiIh F.fMiddleChihiIh K.kHeadIh K.kMiddleIh	FrontLikeMiddleI
