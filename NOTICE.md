@@ -34,7 +34,7 @@ reference font used for this project is:
 |---|---|
 | Name | **Z52 Hara Tig** (`z52haratig.ttf`), "Version 1.02; December 31, 2021" |
 | Copyright string in the font | "Z Code" |
-| License | **none stated** — the font's `name` table has no license or license-URL entry; `OS/2.fsType` = 8 (editable embedding) |
+| License | **No licence text accompanies the font** — its `name` table has no license or license-URL entry, and `OS/2.fsType` = 8 (editable embedding). Redistribution here rests on the author's permission, recorded below, not on a published licence. |
 | Obtained from | <https://github.com/zmongol/mongol_editor_package-main>, commit `618edf0237c6ec18d38b4fe07ab244f2f98a3d7f`, `assets/fonts/z52haratig.ttf` |
 | SHA-256 | `2bc510505c6f52935506a3d342758ed44b271164c7b4841415ff7a94172db2ef` |
 | Coverage | all 52 ZCode code points (U+1865..U+18AA); no Private Use Area; GSUB for script `mong` |
@@ -44,11 +44,23 @@ Contributors") and covers its software; the fonts carry an older, different
 copyright ("Z Code", 2021–2023) and no license of their own, so the MIT grant
 cannot be assumed to cover them.
 
-The font is included unmodified as `third_party/fonts/z52haratig.ttf`, at the
-project owner's direction, **while its license is still unconfirmed**; it is
-not covered by this project's GPL. `tools/fetch_font.py` re-downloads it from
-the pinned commit and verifies the hash. The library itself never needs the
-font.
+The font is included unmodified as `third_party/fonts/z52haratig.ttf`. The
+project owner confirmed with the original author (Zorigt, east-mod) that the
+font is free to use and may be redistributed with this port. That permission
+was given in correspondence; it is not a published licence, and the font still
+carries no licence text of its own, so it stays outside this project's GPL and
+is not relicensed by it. `tools/fetch_font.py` re-downloads the font from the
+pinned commit and verifies the hash. The library itself never needs the font.
+
+**One point is still worth settling in writing.** The permission came from the
+author of the engine this port derives from. The font's own copyright string
+is "Z Code" and it was obtained from a different repository (`zmongol`), whose
+`LICENSE` covers only its software. If that is the same rights holder, nothing
+further is needed. If it is not, the font needs permission from whoever holds
+"Z Code". Either way, a named licence -- OFL-1.1 is the usual choice for a
+font -- in a `LICENSE` file beside the font or in its `name` table is what a
+downstream redistributor can rely on: a private assurance given to this
+project does not travel with the file.
 
 ## Data not included
 
