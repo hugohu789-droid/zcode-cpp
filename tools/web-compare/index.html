@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zcode-cpp ⟷ ime-java 转写对比</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --card: #ffffff;
+    --border: #e3e5e8;
+    --title: #202124;
+    --body: #3c4043;
+    --muted: #80868b;
+    --accent: #1a73e8;
+    --accent-soft: #e8f0fe;
+    --error: #c5221f;
+    --error-soft: #fce8e6;
+    --ok: #0d7340;
+    --ok-soft: #e6f4ea;
+    --warn: #8a5300;
+    --warn-soft: #fef7e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px;
+    background: var(--bg); color: var(--body);
+    font-family: "Segoe UI", system-ui, sans-serif; font-size: 14px;
+  }
+  h1 { margin: 0 0 4px; font-size: 18px; color: var(--title); font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 14px;
+  }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  select, input[type=text], input[type=number] {
+    font: inherit; padding: 7px 9px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff;
+  }
+  input[type=text] { min-width: 220px; }
+  button {
+    font: inherit; padding: 8px 16px; border: 0; border-radius: 6px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button:disabled { background: #bdc1c6; cursor: default; }
+  button.ghost { background: #fff; color: var(--body); border: 1px solid var(--border); }
+  .mono { font-family: Consolas, monospace; }
+  .path { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); }
+  .status { font-size: 12px; margin-top: 10px; }
+  .status.err { color: var(--error); }
+  .status.ok { color: var(--ok); }
+  .note {
+    font-size: 12px; color: var(--warn); background: var(--warn-soft);
+    border: 1px solid #fde293; border-radius: 6px;
+    padding: 8px 10px; margin-top: 10px; line-height: 1.6;
+  }
+
+  /* Verdict */
+  .verdict {
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+    border: 1px solid var(--border); background: #fff;
+    font-size: 14px; line-height: 1.7;
+  }
+  .verdict.same { background: var(--ok-soft); border-color: #b7dfc4; color: var(--ok); }
+  .verdict.differ { background: var(--error-soft); border-color: #f5c4c0; color: var(--error); }
+  .verdict .big { font-size: 16px; font-weight: 600; }
+  .verdict .detail { color: var(--body); font-size: 12px; }
+
+  /* Aligned view: one cell per index, the sides' columns next to each other. */
+  .cells { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+  .cell {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 6px 4px; background: #fff; min-width: 54px;
+  }
+  .cell.differ { border-color: #e8827c; background: var(--error-soft); }
+  .cell .n { font-size: 11px; color: var(--muted); text-align: center; margin-bottom: 4px; }
+  .cell .pair { display: flex; flex-direction: row; gap: 6px; justify-content: center; }
+  .slot { display: flex; flex-direction: column; align-items: center; }
+  .slot .tag {
+    font-size: 9px; color: var(--muted); font-family: Consolas, monospace;
+    margin-bottom: 2px; letter-spacing: .5px;
+  }
+  .slot.bad .tag { color: var(--error); }
+
+  /* Candidates: one vertical column each, columns run left to right.
+     writing-mode gives the top-to-bottom flow; sideways rotates the glyphs
+     90 degrees clockwise, which is how a Mongolian font's horizontally-drawn
+     glyphs are meant to be set vertically. */
+  .zc {
+    writing-mode: vertical-lr;
+    text-orientation: sideways;
+    line-height: 1.1;
+    white-space: nowrap;
+    color: var(--title);
+  }
+  .lat {
+    font-family: Consolas, monospace; font-size: 12px; white-space: nowrap;
+    color: var(--title);
+  }
+  .miss { color: var(--muted); font-size: 18px; }
+
+  /* Separate view: one pane per side. */
+  .pane { margin-bottom: 14px; }
+  .pane h2 {
+    margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--title);
+  }
+  .pane .meta-line { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .list { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+  .cand {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 6px 6px; background: #fff;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .cand.differ { border-color: #e8827c; background: var(--error-soft); }
+  .cand .n { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .scoremeta {
+    margin-top: 6px; font-size: 10px; color: var(--muted);
+    font-family: Consolas, monospace;
+    writing-mode: horizontal-tb; max-width: 150px; word-break: break-all;
+    white-space: pre-line; line-height: 1.5;
+  }
+
+  table.batch { border-collapse: collapse; font-size: 12px; width: 100%; }
+  table.batch th, table.batch td {
+    border-bottom: 1px solid var(--border); padding: 5px 8px; text-align: left;
+  }
+  table.batch th { color: var(--muted); font-weight: 600; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  pre {
+    background: #f8f9fa; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; overflow-x: auto; font-size: 11px; max-height: 300px;
+  }
+  .empty { color: var(--muted); font-size: 13px; }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent); margin-right: 6px;
+  }
+  .pill.off { background: #f1f3f4; color: var(--muted); }
+  .pill.bad { background: var(--error-soft); color: var(--error); }
+</style>
+</head>
+<body>
+
+<h1>zcode-cpp ⟷ ime-java 转写对比</h1>
+<div class="sub">C++ 移植与 Java 原版逐项对比 &middot; 候选竖排,列从左到右</div>
+
+<div class="card">
+  <div id="info"><span class="empty">正在检查两侧…</span></div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <div>
+      <label for="kind">对比项</label>
+      <select id="kind">
+        <option value="severe">严格 severe &mdash; Java 服务 vs C++(可逐项对比)</option>
+        <option value="fuzzy">fuzzy 拼接 &mdash; golden vs C++(可逐项对比)</option>
+        <option value="decompose">分解 decompose &mdash; golden vs C++</option>
+        <option value="dict:/ime/">Java 词典 /ime/{key} &mdash; C++ 无对应</option>
+        <option value="dict:/ime/fuzzy/">Java 词典 /ime/fuzzy/{key} &mdash; C++ 无对应</option>
+        <option value="dict:/ime/fuzzy/score/">Java 词典 /ime/fuzzy/score/{key} &mdash; C++ 无对应</option>
+      </select>
+    </div>
+    <div>
+      <label for="key">输入(拉丁键)</label>
+      <input type="text" id="key" value="bagsi" list="words" autocomplete="off" spellcheck="false">
+      <datalist id="words"></datalist>
+    </div>
+    <div><button id="go">对比</button></div>
+    <div><button id="clear" class="ghost">清空</button></div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <div>
+      <label for="font">字体</label>
+      <select id="font"></select>
+    </div>
+    <div>
+      <label for="size">字号</label>
+      <input type="number" id="size" value="34" min="12" max="96" step="2" style="width:76px">
+    </div>
+    <div>
+      <label for="limit">最多显示</label>
+      <input type="number" id="limit" value="60" min="1" max="500" step="10" style="width:76px">
+    </div>
+    <div>
+      <label for="view">视图</label>
+      <select id="view">
+        <option value="aligned">对齐对比</option>
+        <option value="separate">分开显示</option>
+      </select>
+    </div>
+  </div>
+  <div class="status" id="status"></div>
+  <div class="path" id="path"></div>
+  <div class="note" id="kindnote" style="display:none"></div>
+</div>
+
+<div id="verdict"></div>
+
+<div class="card">
+  <div id="results"><span class="empty">还没有结果。</span></div>
+  <details>
+    <summary>原始 JSON</summary>
+    <pre id="raw">—</pre>
+  </details>
+</div>
+
+<div class="card">
+  <div class="row">
+    <div>
+      <label for="bkind">批量对比</label>
+      <select id="bkind">
+        <option value="severe">严格 severe(Java 服务 + golden vs C++)</option>
+        <option value="fuzzy">fuzzy 拼接(golden vs C++)</option>
+        <option value="decompose">分解 decompose(golden vs C++)</option>
+      </select>
+    </div>
+    <div>
+      <label for="blimit">词数(0 = 全部)</label>
+      <input type="number" id="blimit" value="100" min="0" max="2000" step="50" style="width:90px">
+    </div>
+    <div><button id="bgo" class="ghost">跑一遍</button></div>
+  </div>
+  <div class="status" id="bstatus"></div>
+  <div id="bresult"></div>
+</div>
+
+<script>
+// The Z52 faces installed on this machine, plus two Unicode Mongolian fonts
+// for contrast: ZCode borrows the assigned code points U+1865..U+18AA, which
+// are Sibe and Manchu letters in Unicode, so a Unicode font renders them as
+// different letters that still look like plausible Mongolian. Switching font
+// and watching the shapes change is the quick way to confirm a form-code font
+// is really in use and not a silent fallback.
+var FONTS = [
+  'Z52 Hara Tig', 'Z52 Agola Tig', 'Z52 Amogolang Tig', 'z52 Bilig Tig',
+  'Z52 Chimeg Tig', 'Z52 Galt Tig', 'Z52 Garcag tig', 'Z52 Hawang Tig',
+  'Noto Sans Mongolian', 'Mongolian Baiti'
+];
+
+// Short tags for the aligned view; the full labels come from the server.
+var TAG = { java: 'JAVA', golden: 'GOLD', cpp: 'C++' };
+
+var NOTES = {
+  severe:
+    '/ime/severe/{key} 是 Java 服务里唯一“只有拼接器、没有词典”的接口:' +
+    'decompose + LetterSplicer.severe,逐项、同序、含重复都应该和 C++ 的 ' +
+    'SHAPE severe 完全一样。golden 一行是同一份 Java 代码离线跑出来的,' +
+    '所以这里是三方校验。',
+  fuzzy:
+    'Java 服务没有暴露拼接器的 fuzzy 列表 —— /ime/fuzzy 把它当作 BK 树的查询键,' +
+    '返回的是词典里的词。所以这里对比的是 golden 文件(tools/golden-java 用未改动的 ' +
+    'Java 原版导出的 LetterSplicer.fuzzy 输出)。只有 golden 里有的输入才能比。',
+  decompose:
+    'Decomposer.decompose:把拉丁串切成键序列的所有切法。本身不含字形,' +
+    '所以按等宽字体横排显示。',
+  dict:
+    'C++ 这边只移植了拼接引擎 —— 没有词典、没有数据库、没有线程池。' +
+    '这三个接口的结果来自 MySQL 里的 49 万条词,没有可对比的 C++ 一侧;' +
+    '列在这里是为了方便顺手看一眼原版服务的输出。'
+};
+
+var $ = function (id) { return document.getElementById(id); };
+var last = null;  // the last response, re-rendered when font/size/view change
+
+(function fillFonts() {
+  var sel = $('font');
+  FONTS.forEach(function (f) {
+    var o = document.createElement('option');
+    o.value = f;
+    // document.fonts.check is advisory, but it catches the common case of a
+    // font that is simply not installed, which would silently fall back.
+    var have = true;
+    try { have = document.fonts.check('32px "' + f + '"'); } catch (e) {}
+    o.textContent = have ? f : f + '  (未安装?)';
+    sel.appendChild(o);
+  });
+})();
+
+function setStatus(text, kind) {
+  var el = $('status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function codePoints(text) {
+  var out = [];
+  for (var i = 0; i < text.length; i++) {
+    out.push('U+' + text.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0'));
+  }
+  return out.join(' ');
+}
+
+// /ime/fuzzy/score returns "word,frequency:N,levenshteinD:N,score:N".
+// Everything after the first comma is measurement, not text, so it must not
+// be set in the Mongolian font.
+function splitScored(item) {
+  var at = item.indexOf(',');
+  if (at < 0) return { text: item, meta: '' };
+  return { text: item.slice(0, at), meta: item.slice(at + 1) };
+}
+
+function glyphColumn(text, latin) {
+  var el = document.createElement('div');
+  if (latin) {
+    el.className = 'lat';
+    el.textContent = text;
+    return el;
+  }
+  el.className = 'zc';
+  el.style.fontFamily = '"' + $('font').value + '"';
+  el.style.fontSize = $('size').value + 'px';
+  el.textContent = text;
+  // Hovering gives the code points, which is what you compare against
+  // tools/golden_lookup.py or Paiza's paiza_query.
+  el.title = codePoints(text);
+  return el;
+}
+
+// ------------------------------------------------------------------ rendering
+
+function renderAligned(sides, latin) {
+  var box = document.createElement('div');
+  box.className = 'cells';
+  var limit = parseInt($('limit').value, 10) || 500;
+  // A digest-only side has no items to line up; the verdict carries it.
+  var usable = sides.filter(function (s) { return s.ok && !s.digestOnly; });
+  var n = 0;
+  usable.forEach(function (s) { n = Math.max(n, s.obj.length); });
+  if (!n) {
+    box.innerHTML = '<span class="empty">两侧都没有候选。</span>';
+    return box;
+  }
+  for (var i = 0; i < Math.min(n, limit); i++) {
+    var values = usable.map(function (s) {
+      return i < s.obj.length ? String(s.obj[i]) : null;
+    });
+    var differ = values.some(function (v) { return v !== values[0]; });
+
+    var cell = document.createElement('div');
+    cell.className = 'cell' + (differ ? ' differ' : '');
+    var num = document.createElement('div');
+    num.className = 'n';
+    num.textContent = (i + 1);
+    cell.appendChild(num);
+
+    var pair = document.createElement('div');
+    pair.className = 'pair';
+    usable.forEach(function (s, k) {
+      var slot = document.createElement('div');
+      slot.className = 'slot' + (differ ? ' bad' : '');
+      var tag = document.createElement('div');
+      tag.className = 'tag';
+      // With everything equal one column is enough; tag only when it matters.
+      tag.textContent = differ || usable.length > 1 ? (TAG[s.id] || s.id) : '';
+      slot.appendChild(tag);
+      if (values[k] === null) {
+        var dash = document.createElement('div');
+        dash.className = 'miss';
+        dash.textContent = '—';
+        slot.appendChild(dash);
+      } else {
+        slot.appendChild(glyphColumn(values[k], latin));
+      }
+      pair.appendChild(slot);
+    });
+    cell.appendChild(pair);
+    box.appendChild(cell);
+  }
+  if (n > limit) {
+    var more = document.createElement('div');
+    more.className = 'empty';
+    more.style.alignSelf = 'center';
+    more.textContent = '… 还有 ' + (n - limit) + ' 项未显示';
+    box.appendChild(more);
+  }
+  return box;
+}
+
+function renderPane(side, latin, reference) {
+  var pane = document.createElement('div');
+  pane.className = 'pane';
+  var h = document.createElement('h2');
+  h.textContent = side.label;
+  pane.appendChild(h);
+
+  var meta = document.createElement('div');
+  meta.className = 'meta-line';
+  if (!side.ok) {
+    meta.innerHTML = '<span class="pill bad">不可用</span>' + (side.error || '');
+    pane.appendChild(meta);
+    return pane;
+  }
+  if (side.digestOnly) {
+    meta.innerHTML = '<span class="pill off">只有校验和</span>' + side.count +
+      ' 条,超过 2000,golden 文件只存了 FNV-1a 校验和 ' +
+      '<span class="mono">' + side.digest + '</span>';
+    pane.appendChild(meta);
+    return pane;
+  }
+  meta.textContent = side.obj.length + ' 条' +
+    (side.runTime !== null && side.runTime !== undefined ? ',耗时 ' + side.runTime + ' ms' : '');
+  pane.appendChild(meta);
+
+  var list = document.createElement('div');
+  list.className = 'list';
+  var limit = parseInt($('limit').value, 10) || side.obj.length;
+  if (!side.obj.length) {
+    list.innerHTML = '<span class="empty">没有候选。</span>';
+  }
+  side.obj.slice(0, limit).forEach(function (item, i) {
+    var parts = splitScored(String(item));
+    var cand = document.createElement('div');
+    var differ = reference && (i >= reference.length || reference[i] !== String(item));
+    cand.className = 'cand' + (differ ? ' differ' : '');
+    var num = document.createElement('div');
+    num.className = 'n';
+    num.textContent = (i + 1);
+    cand.appendChild(num);
+    cand.appendChild(glyphColumn(parts.text, latin));
+    if (parts.meta) {
+      var m = document.createElement('div');
+      m.className = 'scoremeta';
+      m.textContent = parts.meta.replace(/,/g, chr10());
+      cand.appendChild(m);
+    }
+    list.appendChild(cand);
+  });
+  pane.appendChild(list);
+  return pane;
+}
+
+function chr10() { return String.fromCharCode(10); }
+
+function renderVerdict(data) {
+  var box = $('verdict');
+  box.innerHTML = '';
+  var v = data.verdict;
+  if (!v || v.same === null) {
+    var none = document.createElement('div');
+    none.className = 'verdict';
+    none.innerHTML = '<span class="big">没有可比对的一侧</span>' +
+      '<div class="detail">' +
+      (data.sides || []).filter(function (s) { return !s.ok; })
+        .map(function (s) { return (TAG[s.id] || s.id) + ': ' + (s.error || '不可用'); })
+        .join('<br>') + '</div>';
+    box.appendChild(none);
+    return;
+  }
+  var card = document.createElement('div');
+  // A difference that only the live service shows, while the patched original
+  // agrees with C++, is one of the two documented fixes -- amber, not red.
+  var patched = !v.same && v.sameExceptPatches;
+  card.className = 'verdict ' + (v.same ? 'same' : (patched ? '' : 'differ'));
+  if (patched) {
+    card.style.background = 'var(--warn-soft)';
+    card.style.borderColor = '#fde293';
+    card.style.color = 'var(--warn)';
+  }
+  var lines = v.pairs.map(function (p) {
+    var who = (TAG[p.a] || p.a) + ' vs ' + (TAG[p.b] || p.b);
+    if (p.how === 'digest') {
+      return who + (p.same ? ':一致(' + p.countA + ' 条,比的是校验和)'
+                           : ':不一致(' + p.countA + ' vs ' + p.countB +
+                             ' 条,校验和 ' + p.digestA + ' vs ' + p.digestB + ')');
+    }
+    if (p.same) return who + ':一致(' + p.countA + ' 条,逐项同序)';
+    var why = [];
+    why.push(p.countA + ' vs ' + p.countB + ' 条');
+    if (p.firstDiff !== null && p.firstDiff !== undefined) {
+      why.push('首个差异在第 ' + (p.firstDiff + 1) + ' 项');
+    }
+    if (p.sameAsMultiset) why.push('集合相同,仅顺序不同');
+    if (p.onlyA.length) why.push('只有 ' + (TAG[p.a] || p.a) + ' 有 ' + p.onlyA.length + ' 项');
+    if (p.onlyB.length) why.push('只有 ' + (TAG[p.b] || p.b) + ' 有 ' + p.onlyB.length + ' 项');
+    if (p.knownPatch) {
+      why.push('这是本项目修掉的原版 bug —— 打过补丁的原版(GOLD)和 C++ 一致,' +
+               '在跑的服务是未修版。见 README“Deviations from the Java original”');
+    }
+    return who + ':' + why.join(',');
+  });
+  card.innerHTML = '<span class="big">' +
+    (v.same ? '完全一致' : (patched ? '只差在已知的原版 bug 上' : '有差异')) +
+    '</span><div class="detail">' + lines.join('<br>') + '</div>';
+  box.appendChild(card);
+}
+
+function renderCompare(data) {
+  var latin = data.kind === 'decompose';
+  renderVerdict(data);
+  var box = $('results');
+  box.innerHTML = '';
+  if ($('view').value === 'aligned') {
+    box.appendChild(renderAligned(data.sides, latin));
+    return;
+  }
+  var cpp = data.sides.filter(function (s) { return s.id === 'cpp'; })[0];
+  var ref = cpp && cpp.ok ? cpp.obj.map(String) : null;
+  data.sides.forEach(function (s) {
+    box.appendChild(renderPane(s, latin, s.id === 'cpp' ? null : ref));
+  });
+}
+
+function renderDictOnly(label, items, serverMs) {
+  $('verdict').innerHTML = '';
+  var box = $('results');
+  box.innerHTML = '';
+  box.appendChild(renderPane({
+    id: 'java', label: label, ok: true, obj: items, runTime: serverMs
+  }, false, null));
+}
+
+// ------------------------------------------------------------------- queries
+
+function query() {
+  var key = $('key').value.trim();
+  if (!key) { setStatus('请输入内容', 'err'); return; }
+  var kind = $('kind').value;
+  $('go').disabled = true;
+  setStatus('查询中…');
+  var t0 = performance.now();
+
+  if (kind.indexOf('dict:') === 0) {
+    var path = kind.slice(5) + encodeURIComponent(key);
+    $('path').textContent = 'GET ' + path;
+    fetch(path).then(function (r) { return r.text(); }).then(function (text) {
+      $('raw').textContent = text;
+      var d = JSON.parse(text).data;
+      var items = Array.isArray(d) ? d : (d && d.obj) || [];
+      var ms = d && d.runTime !== undefined ? d.runTime : null;
+      last = { dict: kind.slice(5), items: items, ms: ms };
+      renderDictOnly('Java 服务 · ' + kind.slice(5) + '{key}', items, ms);
+      setStatus('候选 ' + items.length + ' 条' +
+                (ms !== null ? ',服务耗时 ' + ms + ' ms' : '') +
+                ',往返 ' + (performance.now() - t0).toFixed(0) + ' ms', 'ok');
+    }).catch(function (e) {
+      setStatus('请求失败: ' + e.message + '(Java 服务起了吗?)', 'err');
+      $('results').innerHTML = '<span class="empty">没有结果。</span>';
+    }).then(function () { $('go').disabled = false; });
+    return;
+  }
+
+  var url = '/api/compare/' + kind + '/' + encodeURIComponent(key);
+  $('path').textContent = 'GET ' + url;
+  fetch(url).then(function (r) { return r.text(); }).then(function (text) {
+    $('raw').textContent = text;
+    var res = JSON.parse(text);
+    if (res.ret === false) {
+      setStatus('失败: ' + (res.data && res.data.error), 'err');
+      $('results').innerHTML = '<span class="empty">没有结果。</span>';
+      return;
+    }
+    last = res.data;
+    renderCompare(res.data);
+    var counts = res.data.sides.map(function (s) {
+      return (TAG[s.id] || s.id) + ' ' + (s.ok ? s.obj.length : '—');
+    }).join(' / ');
+    setStatus(counts + ',往返 ' + (performance.now() - t0).toFixed(0) + ' ms',
+              res.data.verdict.same === false ? 'err' : 'ok');
+  }).catch(function (e) {
+    setStatus('请求失败: ' + e.message, 'err');
+    $('results').innerHTML = '<span class="empty">没有结果。</span>';
+  }).then(function () { $('go').disabled = false; });
+}
+
+function rerender() {
+  if (!last) return;
+  if (last.dict) renderDictOnly('Java 服务 · ' + last.dict + '{key}', last.items, last.ms);
+  else renderCompare(last);
+}
+
+// --------------------------------------------------------------------- batch
+
+function batch() {
+  var kind = $('bkind').value;
+  var limit = parseInt($('blimit').value, 10) || 0;
+  $('bgo').disabled = true;
+  $('bstatus').className = 'status';
+  $('bstatus').textContent = '跑着…(' + (limit || '全部') + ' 个输入,severe 每个要问一次 Java 服务)';
+  $('bresult').innerHTML = '';
+  fetch('/api/batch/' + kind + '?limit=' + limit)
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      var d = res.data;
+      if (res.ret === false) {
+        $('bstatus').className = 'status err';
+        $('bstatus').textContent = '失败: ' + (d && d.error);
+        return;
+      }
+      var bad = 0;
+      var summary = Object.keys(d.counts).map(function (k) {
+        var c = d.counts[k];
+        bad += c.differ - (c.knownPatch || 0);
+        return k + ': 一致 ' + c.same + ',不一致 ' + c.differ +
+          (c.knownPatch ? '(其中 ' + c.knownPatch + ' 项是已知的原版 bug)' : '');
+      });
+      $('bstatus').className = 'status ' + (bad ? 'err' : 'ok');
+      $('bstatus').textContent = d.tested + ' 个输入,' + d.elapsedMs + ' ms。' +
+        summary.join(' / ');
+      var html = '';
+      if (d.skipped.length) {
+        html += '<div class="note">跳过 ' + d.skipped.length + ' 项:' +
+          d.skipped.map(function (s) {
+            return s.input + '(' + (TAG[s.side] || s.side) + ': ' + s.error + ')';
+          }).join('、') + '</div>';
+      }
+      if (d.mismatches.length) {
+        html += '<table class="batch"><tr><th>输入</th><th>对比</th>' +
+          '<th>条数</th><th>首个差异</th><th>集合</th><th>性质</th></tr>';
+        d.mismatches.forEach(function (m) {
+          html += '<tr><td class="mono">' + m.input + '</td><td>' + m.pair +
+            '</td><td>' + m.countA + ' vs ' + m.countB + '</td><td>' +
+            (m.firstDiff === null ? '—' : '第 ' + (m.firstDiff + 1) + ' 项') +
+            '</td><td>' + (m.sameAsMultiset ? '相同,仅顺序' : '不同') +
+            '</td><td>' + (m.knownPatch ? '已知原版 bug' : '待查') +
+            '</td></tr>';
+        });
+        html += '</table>';
+      } else if (!d.skipped.length) {
+        html = '<div class="empty">没有不一致的输入。</div>';
+      }
+      $('bresult').innerHTML = html;
+    })
+    .catch(function (e) {
+      $('bstatus').className = 'status err';
+      $('bstatus').textContent = '请求失败: ' + e.message;
+    })
+    .then(function () { $('bgo').disabled = false; });
+}
+
+// ---------------------------------------------------------------------- init
+
+function showNote() {
+  var kind = $('kind').value;
+  var text = kind.indexOf('dict:') === 0 ? NOTES.dict : NOTES[kind];
+  var el = $('kindnote');
+  el.textContent = text || '';
+  el.style.display = text ? '' : 'none';
+}
+
+function loadInfo() {
+  fetch('/api/info').then(function (r) { return r.json(); }).then(function (res) {
+    var d = res.data;
+    var e = d.engine;
+    var parts = [];
+    parts.push('<span class="pill' + (e.error ? ' bad' : '') + '">C++ 引擎</span>' +
+      (e.error ? e.error : (e.hello.join(' v') || '?')) +
+      ' &middot; <span class="mono" style="font-size:11px">' + e.path + '</span>');
+    parts.push('<span class="pill' + (d.java.up ? '' : ' off') + '">Java 服务</span>' +
+      (d.java.up ? d.java.url + ' 在跑' :
+       d.java.url + ' 不通(' + d.java.error + ') —— severe 只能和 golden 比,词典接口不可用'));
+    parts.push('<span class="pill' + (d.golden.length ? '' : ' off') + '">golden</span>' +
+      (d.golden.length ? d.golden.join('、') : '没找到 testdata/'));
+    $('info').innerHTML = parts.join('<br>');
+  }).catch(function (e) {
+    $('info').innerHTML = '<span class="pill bad">本页服务</span>' + e.message;
+  });
+  fetch('/api/words').then(function (r) { return r.json(); }).then(function (res) {
+    var dl = $('words');
+    (res.data.obj || []).forEach(function (w) {
+      var o = document.createElement('option');
+      o.value = w;
+      dl.appendChild(o);
+    });
+  }).catch(function () {});
+}
+
+$('go').addEventListener('click', query);
+$('bgo').addEventListener('click', batch);
+$('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') query(); });
+$('clear').addEventListener('click', function () {
+  $('key').value = '';
+  last = null;
+  $('results').innerHTML = '<span class="empty">还没有结果。</span>';
+  $('verdict').innerHTML = '';
+  $('raw').textContent = '—';
+  setStatus('');
+  $('path').textContent = '';
+  $('key').focus();
+});
+// Changing the font, size, limit or view re-renders the last response; it
+// does not re-query.
+['font', 'size', 'limit', 'view'].forEach(function (id) {
+  $(id).addEventListener('change', rerender);
+});
+$('kind').addEventListener('change', function () { showNote(); $('key').focus(); });
+showNote();
+loadInfo();
+</script>
+</body>
+</html>
