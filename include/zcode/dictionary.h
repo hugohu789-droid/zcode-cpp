@@ -123,6 +123,12 @@ public:
     // thousands of times slower.
     std::vector<SuggestWord> match_bk_reference(std::u32string_view spliced) const;
 
+    // How many words the index finds for one sequence, with no scoring and
+    // no filtering. A diagnostic: it separates the cost of the search from
+    // the cost of scoring what the search found, which for this workload are
+    // two different problems with two different answers (bench/dict_profile).
+    std::size_t index_hits(std::u32string_view spliced) const;
+
 private:
     struct Impl;
     explicit Dictionary(std::unique_ptr<Impl> impl);

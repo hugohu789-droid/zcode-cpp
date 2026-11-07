@@ -248,6 +248,15 @@ std::vector<SuggestWord> Dictionary::match(std::u32string_view spliced) const {
     return marker.mark_and_filter();
 }
 
+std::size_t Dictionary::index_hits(std::u32string_view spliced) const {
+    if (spliced.empty()) {
+        return 0;
+    }
+    dict::Trie::Result found;
+    impl_->search(spliced, found);
+    return found.words.size();
+}
+
 std::vector<SuggestWord> Dictionary::match_bk_reference(std::u32string_view spliced) const {
     if (spliced.empty()) {
         return {};

@@ -111,6 +111,10 @@ std::vector<SuggestWord> Ime::fuzzy_make_word_in(std::string_view latin,
     std::unordered_map<ZString, std::size_t, ZStringHash> index;
     std::vector<SuggestWord> merged;
 
+    // Reused across decompositions; cleared for each, because the tail
+    // filter below belongs to the decomposition and not to the sequence.
+    std::unordered_set<ZString, ZStringHash> already_looked_up;
+
     for (const std::vector<std::string>& keys : decompositions) {
         const std::vector<ZString> spliced = impl_->engine->splice(keys, Mode::fuzzy);
         if (spliced.empty()) {
@@ -120,7 +124,22 @@ std::vector<SuggestWord> Ime::fuzzy_make_word_in(std::string_view latin,
         // found from this decomposition, not to the spliced sequences.
         const std::string& last_key = keys.back();
 
+        // The splicer enumerates a product of per-key shape choices, and
+        // different choices can spell the same code points: `gggggg` yields
+        // 16,875 sequences of which 5,376 are distinct, `iiiiiiiiii` 2,048 of
+        // which 56 are. Looking one up twice cannot change the answer -- the
+        // merge below keeps the best-scoring entry per word, and a repeat
+        // produces exactly what the first produced -- so the repeats are
+        // pure cost. Skipping them keeps the order of the survivors, which
+        // is what the merge's "the later of two equal scores wins" depends
+        // on.
+        already_looked_up.clear();
+        already_looked_up.reserve(spliced.size());
+
         for (const ZString& sequence : spliced) {
+            if (!already_looked_up.insert(sequence).second) {
+                continue;
+            }
             if (impl_->negative_cache_enabled) {
                 std::lock_guard<std::mutex> lock(impl_->mutex);
                 if (impl_->cache_for(dictionary).count(sequence) != 0) {

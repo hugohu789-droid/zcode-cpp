@@ -109,4 +109,9 @@ if(ZCODE_BUILD_BENCH)
     target_include_directories(zcode_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     target_compile_definitions(zcode_bench PRIVATE ZCODE_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata")
     target_compile_options(zcode_bench PRIVATE ${ZCODE_WARNINGS})
+
+    # Splits one keystroke's cost into splicing, searching and scoring.
+    add_executable(zcode_dict_profile bench/dict_profile.cpp)
+    target_link_libraries(zcode_dict_profile PRIVATE zcode)
+    target_compile_options(zcode_dict_profile PRIVATE ${ZCODE_WARNINGS})
 endif()
