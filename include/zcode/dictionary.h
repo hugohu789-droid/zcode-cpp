@@ -72,6 +72,90 @@ struct Word {
     std::uint64_t frequency = 0;
 };
 
+// A user's own words, and how recently each was used.
+//
+// The division of labour is deliberate: **this engine ranks, the host
+// stores.** The host owns the file, the database, the per-profile scoping,
+// the privacy policy and any synchronisation; it replays what it has into a
+// UserWords at startup, tells this class when the user commits a word, and
+// reads the entries back out to persist them. Nothing here touches a disk or
+// a clock, which is also what makes it testable.
+//
+// `tick` is the host's own clock, and the only thing this class assumes
+// about it is that it does not go backwards. Days since an epoch is the
+// natural unit -- then `half_life` is in days -- but a counter of commits
+// works too, and so does a Unix timestamp if `half_life` is set to match.
+//
+// The habit model is Chewing's: a word's weight is how often it was chosen,
+// damped so that the twentieth use is worth far less than the first, decayed
+// by how long ago that was. Two words the user picks equally often are then
+// ordered by which was used more recently, and a word picked once a year ago
+// fades back to where the dictionary had it.
+//
+//     strength = count / (count + saturation)
+//     decay    = 0.5 ^ ((now - tick) / half_life)
+//     bonus    = weight * strength * decay
+//
+// The bonus is added to the score the dictionary gave, which is normalised
+// to at most 1, so with the default weight a well-established habit outranks
+// anything the dictionary alone can offer, and a single old use only nudges.
+//
+// **An empty UserWords changes nothing.** Every bonus is zero, no words are
+// added, and the output is the original's to the last float -- which is what
+// the comparison against the Java service depends on.
+class UserWords {
+public:
+    struct Entry {
+        ZString word;
+        std::uint32_t count = 0;   // times the user committed it
+        std::uint64_t tick = 0;    // the host's clock, when they last did
+    };
+
+    struct Options {
+        // How much a fully established habit may add to a score of at most 1.
+        float weight = 1.0F;
+        // Ticks after which an unused word's bonus halves.
+        float half_life = 30.0F;
+        // Damping on the count: at `saturation` uses the strength is 0.5.
+        float saturation = 2.0F;
+    };
+
+    UserWords();
+    explicit UserWords(Options options);
+    UserWords(UserWords&&) noexcept;
+    UserWords& operator=(UserWords&&) noexcept;
+    ~UserWords();
+
+    const Options& options() const;
+    void set_options(Options options);
+
+    // Restores one entry, as the host read it back from its own store. A
+    // word already present keeps the higher count and the later tick, so
+    // replaying a store twice is harmless.
+    void restore(const Entry& entry);
+    // The user committed `word` at `tick`: one more use, as of then.
+    void learn(const ZString& word, std::uint64_t tick);
+    void forget(const ZString& word);
+    void clear();
+
+    std::size_t size() const;
+    // Every entry, for the host to persist. Ordered by word, so a host
+    // diffing two dumps sees only what changed.
+    std::vector<Entry> entries() const;
+
+    // The habit bonus for one word at `now`; 0 for a word never committed.
+    float bonus(const ZString& word, std::uint64_t now) const;
+
+    // The user's own words that match this spliced sequence, by the same
+    // rule the dictionary uses: the query is a subsequence of the word, the
+    // word's length is in [L, 2L), and the first code point matches.
+    std::vector<ZString> match(std::u32string_view spliced) const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
 // The word list and the index over it.
 //
 // A Dictionary is immutable and may be shared by any number of threads. A
@@ -180,6 +264,20 @@ public:
     // be turned off. It is cleared whenever the dictionary set changes.
     void set_negative_cache_enabled(bool enabled);
     void clear_negative_cache();
+
+    // The user's own words and habits (see UserWords), and the host's clock
+    // reading to decay them against. Both are the host's: it owns the
+    // storage, this owns the ranking.
+    //
+    // A word the user has committed gets its habit bonus added to the score
+    // the dictionary gave it. A word only the user has is offered too, above
+    // the dictionary's own, because it matched what was typed and the user
+    // put it there. Null, or empty, leaves every answer exactly as it was.
+    // The store must outlive the Ime.
+    void set_user_words(const UserWords* user_words);
+    const UserWords* user_words() const;
+    void set_now(std::uint64_t tick);
+    std::uint64_t now() const;
 
 private:
     std::vector<SuggestWord> fuzzy_make_word_in(std::string_view latin,

@@ -5,6 +5,7 @@
 // them.
 
 #include <algorithm>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -30,6 +31,9 @@ struct Ime::Impl {
     const Engine* engine;
     const Dictionary* dictionary;
     const Dictionary* extension = nullptr;
+
+    const UserWords* user_words = nullptr;
+    std::uint64_t now = 0;
 
     bool negative_cache_enabled = true;
     mutable std::mutex mutex;
@@ -76,6 +80,20 @@ void Ime::set_extension(const Dictionary* extension) {
 
 const Dictionary* Ime::extension() const { return impl_->extension; }
 
+void Ime::set_user_words(const UserWords* user_words) {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    impl_->user_words = user_words;
+}
+
+const UserWords* Ime::user_words() const { return impl_->user_words; }
+
+void Ime::set_now(std::uint64_t tick) {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    impl_->now = tick;
+}
+
+std::uint64_t Ime::now() const { return impl_->now; }
+
 std::vector<ZString> Ime::severe_make_word(std::string_view latin) const {
     // severeMakeWord(): the blank guard, decompose, splice each
     // decomposition, concatenate -- which is exactly Engine::shape().
@@ -115,6 +133,13 @@ std::vector<SuggestWord> Ime::fuzzy_make_word_in(std::string_view latin,
     // filter below belongs to the decomposition and not to the sequence.
     std::unordered_set<ZString, ZStringHash> already_looked_up;
 
+    // The user's own words that matched, kept aside until the dictionary's
+    // own merge is done: a word in both is the dictionary's word with a
+    // bonus, not a second entry.
+    const UserWords* user = impl_->user_words;
+    const std::uint64_t now = impl_->now;
+    std::unordered_map<ZString, SuggestWord, ZStringHash> user_hits;
+
     for (const std::vector<std::string>& keys : decompositions) {
         const std::vector<ZString> spliced = impl_->engine->splice(keys, Mode::fuzzy);
         if (spliced.empty()) {
@@ -139,6 +164,22 @@ std::vector<SuggestWord> Ime::fuzzy_make_word_in(std::string_view latin,
         for (const ZString& sequence : spliced) {
             if (!already_looked_up.insert(sequence).second) {
                 continue;
+            }
+            if (user != nullptr) {
+                for (const ZString& word : user->match(sequence)) {
+                    if (!impl_->engine->key_filter_accepts(last_key, word)) {
+                        continue;
+                    }
+                    const int distance =
+                        static_cast<int>(word.size()) - static_cast<int>(sequence.size());
+                    SuggestWord& slot = user_hits[word];
+                    if (!slot.str.empty() && slot.levenshtein_d <= distance) {
+                        continue;  // a closer sighting of the same word wins
+                    }
+                    slot.str = word;
+                    slot.length = static_cast<int>(word.size());
+                    slot.levenshtein_d = distance;
+                }
             }
             if (impl_->negative_cache_enabled) {
                 std::lock_guard<std::mutex> lock(impl_->mutex);
@@ -169,6 +210,35 @@ std::vector<SuggestWord> Ime::fuzzy_make_word_in(std::string_view latin,
                     merged.push_back(std::move(sw));
                 }
             }
+        }
+    }
+
+    // The user's words and habits, which the original has neither of. Both
+    // are no-ops when the host supplied no store, which is what keeps every
+    // answer above identical to the original's.
+    if (user != nullptr) {
+        // A word the user has chosen before keeps its place in the
+        // dictionary's ranking and is lifted by how established the habit
+        // is. The dictionary's score is normalised to at most 1, so with the
+        // default weight a settled habit outranks anything the dictionary
+        // alone can offer, and one old use only nudges.
+        for (SuggestWord& w : merged) {
+            w.score += user->bonus(w.str, now);
+        }
+        // A word only the user has is offered above the dictionary's own: it
+        // matched what was typed by the same rule, and the user put it
+        // there. Its metrics are not the dictionary's -- there is no
+        // frequency to compare and no maximum to normalise against -- so the
+        // score is 1 (what a perfect dictionary match scores) plus the
+        // bonus, and the metric fields stay zero rather than carrying a
+        // number that would look like the dictionary's and mean something
+        // else.
+        for (auto& [word, hit] : user_hits) {
+            if (index.find(word) != index.end()) {
+                continue;  // already in the list, already given its bonus
+            }
+            hit.score = 1.0F + user->bonus(word, now);
+            merged.push_back(std::move(hit));
         }
     }
 

@@ -37,6 +37,7 @@ add_library(zcode
     src/dict/dictionary.cpp
     src/dict/ime.cpp
     src/dict/scan_index.cpp
+    src/dict/user_words.cpp
     src/dict/trie.cpp
     src/dict/word_data_embedded.cpp
     src/engine.cpp
@@ -81,7 +82,8 @@ if(ZCODE_BUILD_TESTS)
         tests/test_rules.cpp
         tests/test_session.cpp
         tests/test_splice_table.cpp
-        tests/test_tables.cpp)
+        tests/test_tables.cpp
+        tests/test_user_words.cpp)
     target_link_libraries(zcode_tests PRIVATE zcode GTest::gtest_main)
     # white-box tests compare internal tables with the Java dumps
     target_include_directories(zcode_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/tests)

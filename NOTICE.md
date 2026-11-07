@@ -21,6 +21,13 @@ Ported: the shaping engine (`letter/`, `letter/base/`, `letter/splice/`,
 ported: the Spring Boot service, MyBatis/MySQL access, the HTTP controllers
 and the thread pool.
 
+Not in the original at all, and therefore nobody else's work: the
+incremental `Session`, the trie index that replaces the Burkhard-Keller
+trees, the stdio service in `service/`, and `UserWords` — the user's own
+words and the habit model over them. Where these change an answer, `README.md`
+says so under "Deviations from the Java original"; `UserWords` changes
+nothing until a host puts something in it.
+
 The data tables in `data/` are transcriptions of the Java classes named in
 their headers. `data/dictionary.tsv` is the `word` table of that project's
 own `ime.sql`, restricted to the rows the service loads

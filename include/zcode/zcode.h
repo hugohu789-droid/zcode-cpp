@@ -130,4 +130,10 @@ private:
 // values are written as U+FFFD.
 std::string to_utf8(std::u32string_view s);
 
+// The inverse, for text arriving from outside. Malformed input is rejected
+// rather than repaired: a host handing this engine a word to remember should
+// be told its bytes were wrong, not have a U+FFFD stored under the user's
+// name. Returns false and leaves `out` empty on bad input.
+bool from_utf8(std::string_view text, std::u32string& out);
+
 }  // namespace zcode

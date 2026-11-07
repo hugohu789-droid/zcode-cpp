@@ -96,4 +96,53 @@ std::string to_utf8(std::u32string_view s) {
     return out;
 }
 
+bool from_utf8(std::string_view text, std::u32string& out) {
+    out.clear();
+    out.reserve(text.size());
+    std::size_t i = 0;
+    while (i < text.size()) {
+        const auto b0 = static_cast<unsigned char>(text[i]);
+        char32_t cp = 0;
+        std::size_t extra = 0;
+        char32_t lowest = 0;  // guards against an overlong encoding
+        if (b0 < 0x80) {
+            cp = b0;
+        } else if ((b0 & 0xE0) == 0xC0) {
+            cp = b0 & 0x1Fu;
+            extra = 1;
+            lowest = 0x80;
+        } else if ((b0 & 0xF0) == 0xE0) {
+            cp = b0 & 0x0Fu;
+            extra = 2;
+            lowest = 0x800;
+        } else if ((b0 & 0xF8) == 0xF0) {
+            cp = b0 & 0x07u;
+            extra = 3;
+            lowest = 0x10000;
+        } else {
+            out.clear();
+            return false;
+        }
+        if (i + extra >= text.size()) {
+            out.clear();
+            return false;
+        }
+        for (std::size_t k = 1; k <= extra; ++k) {
+            const auto b = static_cast<unsigned char>(text[i + k]);
+            if ((b & 0xC0) != 0x80) {
+                out.clear();
+                return false;
+            }
+            cp = (cp << 6) | (b & 0x3Fu);
+        }
+        if (cp < lowest || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+            out.clear();
+            return false;
+        }
+        out.push_back(cp);
+        i += extra + 1;
+    }
+    return true;
+}
+
 }  // namespace zcode

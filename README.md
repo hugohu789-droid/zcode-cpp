@@ -100,6 +100,36 @@ generated with `tools/extract_dictionary.py --extension` and attached with
 with nothing -- which is also when the original answers with nothing -- so
 it fills gaps without contradicting it.
 
+### The user's own words
+
+```cpp
+zcode::UserWords mine;                 // the host fills this from its store
+mine.restore({word, /*count=*/4, /*tick=*/730});
+ime.set_user_words(&mine);
+ime.set_now(931);                      // the host's clock, for the decay
+...
+mine.learn(chosen, 931);               // the user committed one
+for (const auto& e : mine.entries()) { /* the host persists these */ }
+```
+
+**This engine ranks; the host stores.** The host owns the file, the
+per-profile scoping, the privacy policy and any synchronisation; `UserWords`
+touches no disk and no clock, which is also what makes it testable.
+
+The habit model is Chewing's -- how often, damped, decayed by how long ago --
+added to the score the dictionary gave, which is normalised to at most 1:
+
+```
+bonus = weight * count/(count + saturation) * 0.5^((now - tick)/half_life)
+```
+
+So a settled habit outranks anything the dictionary alone can offer, a single
+old use only nudges, and a word left alone for long enough fades back to
+where the dictionary had it. A word **only** the user has is offered too,
+above the dictionary's own, because it matched what was typed by the same
+rule. An empty store changes nothing -- which is what the comparison against
+the Java service depends on, that service having no such feature.
+
 ## Deviations from the Java original
 
 Two bugs of the original are fixed (everything else, including its other

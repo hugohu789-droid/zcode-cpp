@@ -228,6 +228,9 @@ struct Protocol::State {
     const Engine& engine;
     const Dictionary* dictionary;
     std::optional<Ime> ime;
+    // The user's own words live here for the life of the connection; the
+    // host replays them in and reads them back out (USER restore / list).
+    UserWords user_words;
     std::map<std::uint64_t, Session> sessions;
     std::uint64_t next_id = 1;
 
@@ -407,6 +410,89 @@ std::string Protocol::handle(std::string_view line, bool* quit, bool* dictionary
             items.push_back(std::move(joined));
         }
         return Ok(items);
+    }
+
+    // The user's own words. The host owns the storage; this owns the
+    // ranking, so everything here is "give me what you kept" and "here is
+    // what I now have".
+    if (command == "USER") {
+        if (!state_->ime.has_value()) {
+            return Err("this engine was built without a dictionary");
+        }
+        std::string_view tail;
+        const std::string_view what = NextToken(rest, &tail);
+
+        if (what == "now") {
+            std::size_t tick = 0;
+            if (!ParseUnsigned(tail, &tick)) {
+                return Err("USER now takes a tick");
+            }
+            state_->ime->set_now(tick);
+            state_->ime->set_user_words(&state_->user_words);
+            return "OK";
+        }
+        if (what == "learn") {
+            std::string_view word_text;
+            const std::string_view tick_text = NextToken(tail, &word_text);
+            std::size_t tick = 0;
+            if (!ParseUnsigned(tick_text, &tick) || word_text.empty()) {
+                return Err("USER learn takes a tick and a word");
+            }
+            ZString word;
+            if (!from_utf8(word_text, word) || word.empty()) {
+                return Err("USER learn needs a valid word");
+            }
+            state_->user_words.learn(word, tick);
+            state_->ime->set_now(tick);
+            state_->ime->set_user_words(&state_->user_words);
+            return "OK";
+        }
+        if (what == "restore") {
+            // "USER restore <count> <tick> <word>": the word is last because
+            // it is the only field that may hold a space.
+            std::string_view after_count;
+            const std::string_view count_text = NextToken(tail, &after_count);
+            std::string_view word_text;
+            const std::string_view tick_text = NextToken(after_count, &word_text);
+            std::size_t count = 0;
+            std::size_t tick = 0;
+            if (!ParseUnsigned(count_text, &count) || !ParseUnsigned(tick_text, &tick) ||
+                word_text.empty()) {
+                return Err("USER restore takes a count, a tick and a word");
+            }
+            UserWords::Entry entry;
+            if (!from_utf8(word_text, entry.word) || entry.word.empty()) {
+                return Err("USER restore needs a valid word");
+            }
+            entry.count = static_cast<std::uint32_t>(count);
+            entry.tick = tick;
+            state_->user_words.restore(entry);
+            state_->ime->set_user_words(&state_->user_words);
+            return "OK";
+        }
+        if (what == "forget") {
+            if (tail.empty()) return Err("USER forget takes a word");
+            ZString word;
+            if (!from_utf8(tail, word)) return Err("USER forget needs a valid word");
+            state_->user_words.forget(word);
+            return "OK";
+        }
+        if (what == "clear") {
+            state_->user_words.clear();
+            return "OK";
+        }
+        if (what == "list") {
+            // One item per entry, in the same "text,key:value" shape a
+            // scored candidate uses, so a host has one thing to parse.
+            std::vector<std::string> items;
+            for (const UserWords::Entry& entry : state_->user_words.entries()) {
+                items.push_back(to_utf8(entry.word) + ",count:" +
+                                std::to_string(entry.count) + ",tick:" +
+                                std::to_string(entry.tick));
+            }
+            return Ok(items);
+        }
+        return Err("USER takes now, learn, restore, forget, clear or list");
     }
 
     if (command == "DICT") {

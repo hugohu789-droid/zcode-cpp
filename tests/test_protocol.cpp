@@ -408,6 +408,57 @@ TEST_F(ProtocolDictionaryTest, AMissIsReportedOnlyWhenTheDictionaryHadNothing) {
     EXPECT_TRUE(miss);
 }
 
+// ---- the user's own words -----------------------------------------------
+
+TEST_F(ProtocolDictionaryTest, LearningLiftsAWordAndListingReportsIt) {
+    const std::vector<std::string> before = Fields(Type("bagsi", "word", "9"));
+    ASSERT_GT(before.size(), 4U);
+    const std::string target = before[4];
+
+    EXPECT_EQ(Send("USER learn 100 " + target), "OK");
+    const std::vector<std::string> after = Fields(Type("bagsi", "word", "9"));
+    ASSERT_GT(after.size(), 1U);
+    EXPECT_EQ(after[1], target) << "the learned word now leads";
+
+    const std::vector<std::string> listed = Fields(Send("USER list"));
+    ASSERT_EQ(listed.size(), 2U);
+    EXPECT_EQ(listed[1], target + ",count:1,tick:100");
+}
+
+TEST_F(ProtocolDictionaryTest, RestoreReplaysAHostsStore) {
+    const std::vector<std::string> before = Fields(Type("bagsi", "word", "9"));
+    ASSERT_GT(before.size(), 3U);
+    const std::string target = before[3];
+
+    EXPECT_EQ(Send("USER restore 4 500 " + target), "OK");
+    EXPECT_EQ(Send("USER now 500"), "OK");
+    EXPECT_EQ(Fields(Type("bagsi", "word", "9"))[1], target);
+    EXPECT_EQ(Fields(Send("USER list"))[1], target + ",count:4,tick:500");
+
+    // Far enough in the future and the habit has faded.
+    EXPECT_EQ(Send("USER now 2000"), "OK");
+    EXPECT_EQ(Fields(Type("bagsi", "word", "9"))[1], before[1]);
+}
+
+TEST_F(ProtocolDictionaryTest, ClearPutsTheAnswerBack) {
+    const std::vector<std::string> before = Fields(Type("bagsi", "score", "9"));
+    Send("USER learn 10 " + Fields(Type("bagsi", "word", "9"))[3]);
+    EXPECT_NE(Fields(Type("bagsi", "score", "9")), before);
+    EXPECT_EQ(Send("USER clear"), "OK");
+    EXPECT_EQ(Fields(Type("bagsi", "score", "9")), before)
+        << "clearing restores the original's answer exactly";
+}
+
+TEST_F(ProtocolDictionaryTest, UserCommandsValidateBeforeChangingAnything) {
+    EXPECT_EQ(Fields(Send("USER"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("USER sideways"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("USER learn"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("USER learn abc word"))[0], "ERR") << "tick is not a number";
+    EXPECT_EQ(Fields(Send("USER restore 1 word"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("USER learn 1 \xFF\xFE"))[0], "ERR") << "not UTF-8";
+    EXPECT_EQ(Send("USER list"), "OK") << "and none of that stored anything";
+}
+
 TEST_F(ProtocolDictionaryTest, SevereLookupIsNeverAMiss) {
     bool miss = true;
     // No dictionary is consulted, so an empty answer says nothing about it.

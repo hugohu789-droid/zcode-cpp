@@ -47,6 +47,7 @@ shell one-liner, can therefore ignore session management and just use `0`.
 | `SHAPE <mode> <latin>` | Stateless: shape a whole Latin string. No id. |
 | `DECOMPOSE <latin>` | Every way of splitting the input into layout keys. No id. |
 | `LOOKUP <what> <latin>` | Stateless dictionary lookup, named after the original's HTTP endpoints. No id, no cap. |
+| `USER <what> ...` | The user's own words and habits. |
 | `DICT` | What dictionary is loaded. |
 | `QUIT` | End the conversation. The response is sent before the service exits. |
 
@@ -149,6 +150,60 @@ It takes no cap, so a host should prefer `TYPE`/`CAND`.
 A rejected request leaves the session untouched, so a client can recover
 without resynchronising. `DECOMPOSE` returns one item per split, the keys of a
 split joined by spaces, because a split is itself a list.
+
+## The user's own words
+
+The division of labour is deliberate: **this engine ranks, the host stores.**
+The host owns the file or database, the per-profile scoping, the privacy
+policy and any synchronisation. It replays what it kept into the engine at
+startup, tells the engine when the user commits a word, and reads the entries
+back to persist them. Nothing here touches a disk or a clock.
+
+| Request | Meaning |
+|---|---|
+| `USER now <tick>` | The host's clock now reads this. Habits decay against it. |
+| `USER learn <tick> <word>` | The user committed `<word>` at `<tick>`: one more use, as of then. Also sets "now". |
+| `USER restore <count> <tick> <word>` | Replay one stored entry. Replaying the same store twice is harmless -- the higher count and the later tick win -- so a restart does not look like use. |
+| `USER forget <word>` | Drop one entry. |
+| `USER clear` | Drop them all. |
+| `USER list` | Every entry, one item each, as `<word>,count:<n>,tick:<n>` -- the same "text, then fields" shape a scored candidate uses. |
+
+`<tick>` is the host's own clock and the engine assumes only that it does not
+go backwards. Days since an epoch is the natural unit, and then the half-life
+below is in days; a counter of commits works too.
+
+A word the user has committed keeps its place in the dictionary's ranking and
+is lifted by how established the habit is:
+
+```
+strength = count / (count + 2)
+decay    = 0.5 ^ ((now - tick) / 30)
+bonus    = 1.0 * strength * decay
+```
+
+The dictionary's own score is normalised to at most 1, so a settled habit
+outranks anything the dictionary alone can offer and a single old use only
+nudges. A word **only** the user has is offered as well, above the
+dictionary's own, scored `1 + bonus`: it matched what was typed by the same
+rule the dictionary uses, and the user put it there. Its metric fields stay
+zero, because there is no frequency to compare it against and no maximum to
+normalise it by, and a number that looked like the dictionary's but meant
+something else would be worse than none.
+
+**An empty store changes nothing**, which is what the comparison against the
+Java service depends on -- that service has no such feature, so every
+difference would otherwise look like a port bug.
+
+What a host does, in order: replay the store, keep the clock current, ask as
+usual, and record what the user picked.
+
+```
+USER restore 4 730 <word>        # at startup, once per stored entry
+USER now 931                     # today, so the decay is against today
+TYPE 0 b full 27                 # ... one per keystroke
+USER learn 931 <word>            # the user pressed space on this one
+USER list                        # at shutdown, to persist
+```
 
 ## Driving it from a shell
 
