@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "test_util.h"
+#include "zcode/dictionary.h"
 #include "zcode/zcode.h"
 
 namespace {
@@ -129,6 +130,65 @@ int main(int argc, char** argv) {
     run("count_heavy_fuzzy", reps, [&](Checksum& c) {
         for (const auto& w : heavy)
             for (const auto& k : engine->decompose(w)) c.candidates += engine->count(k, zcode::Mode::fuzzy);
+    });
+
+    // ---- the dictionary half ------------------------------------------------
+    auto t_dict = std::chrono::steady_clock::now();
+    auto dictionary = zcode::Dictionary::create();
+    if (!dictionary) return 1;
+    std::printf("\ndictionary load and index  %.2f ms (%zu words)\n",
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_dict).count(),
+                dictionary->size());
+
+    const zcode::Ime ime(*engine, *dictionary);
+    // Word-like inputs only: the golden vocabulary is mostly stress input,
+    // and what matters here is what a person typing actually costs.
+    std::vector<std::string> real_words;
+    for (const auto& w : words) {
+        if (w.size() >= 3 && std::all_of(w.begin(), w.end(), [](char ch) { return ch >= 'a' && ch <= 'z'; })) {
+            real_words.push_back(w);
+        }
+    }
+    std::vector<std::string> prefixes;
+    for (const auto& w : real_words) {
+        for (std::size_t n = 1; n <= w.size(); ++n) prefixes.push_back(w.substr(0, n));
+    }
+    std::printf("%zu word-like inputs, %zu prefixes\n", real_words.size(), prefixes.size());
+
+    auto count_words = [](Checksum& c, const std::vector<zcode::SuggestWord>& ws) {
+        c.candidates += ws.size();
+        for (const auto& w : ws) c.code_points += w.str.size();
+    };
+
+    // One keystroke: the whole path a host runs per key press.
+    run("dict_typing_fuzzy", reps, [&](Checksum& c) {
+        zcode::Ime fresh(*engine, *dictionary);
+        fresh.set_negative_cache_enabled(false);
+        for (const auto& p : prefixes) count_words(c, fresh.fuzzy_make_word(p));
+    });
+    run("dict_typing_cached", reps, [&](Checksum& c) {
+        for (const auto& p : prefixes) count_words(c, ime.fuzzy_make_word(p));
+    });
+    run("dict_make_words", reps, [&](Checksum& c) {
+        for (const auto& w : real_words) c.add(ime.make_word(w));
+    });
+
+    // The same lookups through the structure the original uses, so the
+    // difference is measured rather than asserted. A hundredth of the work:
+    // the whole set would take minutes.
+    std::vector<std::u32string> sequences;
+    for (std::size_t i = 0; i < real_words.size() && sequences.size() < 60; ++i) {
+        for (const auto& s : engine->shape(real_words[i], zcode::Mode::fuzzy)) {
+            sequences.push_back(s);
+            if (sequences.size() >= 60) break;
+        }
+    }
+    std::printf("%zu spliced sequences for the index comparison\n", sequences.size());
+    run("index_trie", reps, [&](Checksum& c) {
+        for (const auto& s : sequences) count_words(c, dictionary->match(s));
+    });
+    run("index_bk_tree", reps, [&](Checksum& c) {
+        for (const auto& s : sequences) count_words(c, dictionary->match_bk_reference(s));
     });
     return 0;
 }

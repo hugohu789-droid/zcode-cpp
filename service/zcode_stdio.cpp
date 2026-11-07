@@ -17,6 +17,7 @@
 #include <string>
 
 #include "protocol.h"
+#include "zcode/dictionary.h"
 #include "zcode/zcode.h"
 
 int main() {
@@ -29,11 +30,21 @@ int main() {
         return 1;
     }
 
+    // The dictionary is part of this build, so a failure to load it is a
+    // build problem; say so and carry on with shaping only, rather than
+    // refusing to start and taking the working half down with it.
+    std::optional<zcode::Dictionary> dictionary = zcode::Dictionary::create(&error);
+    if (!dictionary.has_value()) {
+        std::fprintf(stderr, "zcode_stdio: dictionary not loaded: %s\n",
+                     error.empty() ? "unknown reason" : error.c_str());
+    }
+
     // Unbuffered-enough for a request/response conversation: a client that
     // writes a line and waits must see the response without sending more.
     std::ios::sync_with_stdio(false);
 
-    zcode::service::Protocol protocol(*engine);
+    zcode::service::Protocol protocol(
+        *engine, dictionary.has_value() ? &dictionary.value() : nullptr);
     std::string line;
     while (std::getline(std::cin, line)) {
         bool quit = false;

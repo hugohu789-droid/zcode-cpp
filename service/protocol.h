@@ -24,11 +24,25 @@
 //   CAND <sid> <mode> [max] [dedup]  candidates for the session's keys
 //   SHAPE <mode> <latin>             stateless: shape a whole Latin string
 //   DECOMPOSE <latin>                every way of splitting the input into keys
+//   LOOKUP <what> <latin>            dictionary words, not raw letter shapes
+//   DICT                             what dictionary is loaded
 //   QUIT                             end the conversation
 //
 // <mode> is "severe" or "fuzzy". [max] is a candidate cap (0 = no cap) and
 // [dedup] is 0 or 1; both default to the Options defaults. An unknown <sid>
 // is an error and changes nothing.
+//
+// LOOKUP's <what> selects one of the three methods the original service
+// exposes over HTTP, and the names match those endpoints:
+//
+//   make    /ime/{key}              severe and fuzzy merged
+//   fuzzy   /ime/fuzzy/{key}        dictionary words, best score first
+//   score   /ime/fuzzy/score/{key}  the same, each with its metrics
+//   severe  /ime/severe/{key}       no dictionary; same as SHAPE severe
+//
+// LOOKUP is rejected when the service was started without a dictionary.
+// A host that does not know whether this build has one should ask DICT,
+// which answers with the word count and the index in use.
 //
 // Responses
 //   OK                         success, no payload
@@ -45,14 +59,16 @@
 #include <string>
 #include <string_view>
 
+#include "zcode/dictionary.h"
 #include "zcode/zcode.h"
 
 namespace zcode::service {
 
 class Protocol {
 public:
-    // `engine` must outlive the protocol.
-    explicit Protocol(const Engine& engine);
+    // `engine` and `dictionary` must outlive the protocol. A null dictionary
+    // leaves the shaping commands working and LOOKUP rejected.
+    explicit Protocol(const Engine& engine, const Dictionary* dictionary = nullptr);
     Protocol(Protocol&&) noexcept;
     Protocol& operator=(Protocol&&) noexcept;
     ~Protocol();

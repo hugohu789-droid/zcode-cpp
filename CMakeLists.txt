@@ -15,7 +15,7 @@ else()
 endif()
 
 # ---- data/*.tsv embedded at build time --------------------------------------
-set(ZCODE_DATA_TABLES zcode shapes rules keyboard)
+set(ZCODE_DATA_TABLES zcode shapes rules keyboard dictionary)
 set(ZCODE_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 set(ZCODE_GENERATED_HEADERS)
 foreach(table IN LISTS ZCODE_DATA_TABLES)
@@ -34,6 +34,10 @@ endforeach()
 # ---- library ------------------------------------------------------------------
 add_library(zcode
     src/decomposer.cpp
+    src/dict/dictionary.cpp
+    src/dict/ime.cpp
+    src/dict/trie.cpp
+    src/dict/word_data_embedded.cpp
     src/engine.cpp
     src/key_filter.cpp
     src/keyboard_layout.cpp
@@ -68,6 +72,7 @@ if(ZCODE_BUILD_TESTS)
     endif()
 
     add_executable(zcode_tests
+        tests/test_dictionary.cpp
         tests/test_golden.cpp
         tests/test_options.cpp
         tests/test_protocol.cpp

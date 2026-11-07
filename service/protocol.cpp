@@ -5,6 +5,7 @@
 #include <charconv>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -98,10 +99,13 @@ std::vector<std::string> ToUtf8(const std::vector<ZString>& candidates) {
 }  // namespace
 
 struct Protocol::State {
-    explicit State(const Engine& e) : engine(e) {
+    State(const Engine& e, const Dictionary* d) : engine(e), dictionary(d) {
         sessions.emplace(0, Session(e));  // Session 0 always exists.
+        if (d != nullptr) ime.emplace(e, *d);
     }
     const Engine& engine;
+    const Dictionary* dictionary;
+    std::optional<Ime> ime;
     std::map<std::uint64_t, Session> sessions;
     std::uint64_t next_id = 1;
 
@@ -112,8 +116,8 @@ struct Protocol::State {
     }
 };
 
-Protocol::Protocol(const Engine& engine)
-    : state_(std::make_unique<State>(engine)) {}
+Protocol::Protocol(const Engine& engine, const Dictionary* dictionary)
+    : state_(std::make_unique<State>(engine, dictionary)) {}
 Protocol::Protocol(Protocol&&) noexcept = default;
 Protocol& Protocol::operator=(Protocol&&) noexcept = default;
 Protocol::~Protocol() = default;
@@ -260,6 +264,36 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
             items.push_back(std::move(joined));
         }
         return Ok(items);
+    }
+
+    if (command == "DICT") {
+        if (state_->dictionary == nullptr) return Ok({"none"});
+        return Ok({"words", std::to_string(state_->dictionary->size())});
+    }
+
+    if (command == "LOOKUP") {
+        if (!state_->ime.has_value()) {
+            return Err("this engine was built without a dictionary");
+        }
+        std::string_view tail;
+        const std::string_view what = NextToken(rest, &tail);
+        if (tail.empty()) return Err("LOOKUP needs a latin string");
+        if (what == "severe") {
+            return Ok(ToUtf8(state_->ime->severe_make_word(tail)));
+        }
+        if (what == "make") {
+            return Ok(ToUtf8(state_->ime->make_word(tail)));
+        }
+        if (what == "fuzzy" || what == "score") {
+            const std::vector<SuggestWord> words = state_->ime->fuzzy_make_word(tail);
+            std::vector<std::string> items;
+            items.reserve(words.size());
+            for (const SuggestWord& word : words) {
+                items.push_back(what == "score" ? word.to_string() : to_utf8(word.str));
+            }
+            return Ok(items);
+        }
+        return Err("LOOKUP takes make, fuzzy, score or severe");
     }
 
     return Err("unknown command");
