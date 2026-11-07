@@ -122,6 +122,10 @@ Protocol::Protocol(Protocol&&) noexcept = default;
 Protocol& Protocol::operator=(Protocol&&) noexcept = default;
 Protocol::~Protocol() = default;
 
+bool Protocol::has_dictionary() const { return state_->ime.has_value(); }
+
+Ime& Protocol::ime() { return *state_->ime; }
+
 std::string Protocol::handle(std::string_view line, bool* quit) {
     if (quit != nullptr) *quit = false;
 
@@ -268,7 +272,11 @@ std::string Protocol::handle(std::string_view line, bool* quit) {
 
     if (command == "DICT") {
         if (state_->dictionary == nullptr) return Ok({"none"});
-        return Ok({"words", std::to_string(state_->dictionary->size())});
+        std::vector<std::string> items{"words", std::to_string(state_->dictionary->size())};
+        const Dictionary* extension = state_->ime->extension();
+        items.emplace_back("extension");
+        items.push_back(extension == nullptr ? "none" : std::to_string(extension->size()));
+        return Ok(items);
     }
 
     if (command == "LOOKUP") {

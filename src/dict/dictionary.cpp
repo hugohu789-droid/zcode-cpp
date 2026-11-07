@@ -5,17 +5,21 @@
 
 #include <algorithm>
 #include <charconv>
+#include <fstream>
 #include <map>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "dict/bk_tree.h"
 #include "dict/java_float.h"
+#include "dict/scan_index.h"
 #include "dict/score_marker.h"
 #include "dict/trie.h"
 #include "dict/word_data.h"
+#include "dict/word_store.h"
 #include "zcode/dictionary.h"
 
 namespace zcode {
@@ -122,8 +126,18 @@ std::string SuggestWord::to_string() const {
 }
 
 struct Dictionary::Impl {
-    std::vector<Word> words;  // sorted by str, no duplicates
+    dict::WordStore words;  // sorted, no duplicates
+    Index index = Index::fast;
     dict::Trie trie;
+    dict::ScanIndex scan;
+
+    void search(std::u32string_view query, dict::Trie::Result& out) const {
+        if (index == Index::fast) {
+            trie.search(query, out);
+        } else {
+            scan.search(query, out);
+        }
+    }
 
     // Built on first use: only the reference path needs them, and building
     // 38,743 words into one tree per length is not something a host should
@@ -133,7 +147,7 @@ struct Dictionary::Impl {
 
     void build_bk() const {
         for (std::uint32_t i = 0; i < words.size(); ++i) {
-            const std::size_t len = words[i].str.size();
+            const std::size_t len = words.length(i);
             auto it = bk_by_length.find(len);
             if (it == bk_by_length.end()) {
                 it = bk_by_length
@@ -141,7 +155,7 @@ struct Dictionary::Impl {
                                                             std::size(kRootString))))
                          .first;
             }
-            it->second.add(i, words[i].str);
+            it->second.add(i, ZString(words.text(i)));
         }
     }
 };
@@ -153,28 +167,61 @@ Dictionary::~Dictionary() = default;
 
 std::size_t Dictionary::size() const { return impl_->words.size(); }
 
-Dictionary Dictionary::from_words(std::vector<Word> words) {
-    auto impl = std::make_unique<Impl>();
-    impl->words = std::move(words);
-    std::sort(impl->words.begin(), impl->words.end(),
+Dictionary Dictionary::from_words(std::vector<Word> words, Index index) {
+    std::sort(words.begin(), words.end(),
               [](const Word& a, const Word& b) { return a.str < b.str; });
-    impl->words.erase(std::unique(impl->words.begin(), impl->words.end(),
-                                  [](const Word& a, const Word& b) { return a.str == b.str; }),
-                      impl->words.end());
-    impl->trie = dict::Trie::build(impl->words);
+    words.erase(std::unique(words.begin(), words.end(),
+                            [](const Word& a, const Word& b) { return a.str == b.str; }),
+                words.end());
+    auto impl = std::make_unique<Impl>();
+    impl->words.assign(words);
+    words.clear();
+    words.shrink_to_fit();
+    impl->index = index;
+    if (index == Index::fast) {
+        impl->trie = dict::Trie::build(impl->words);
+    } else {
+        impl->scan = dict::ScanIndex::build(impl->words);
+    }
     return Dictionary(std::move(impl));
 }
 
-std::optional<Dictionary> Dictionary::create(std::string* error) {
+std::optional<Dictionary> Dictionary::from_tsv(std::string_view tsv, Index index,
+                                               std::string* error) {
     std::vector<Word> words;
     std::string message;
-    if (!parse_word_list(dict::embedded_word_list(), words, message)) {
+    if (!parse_word_list(tsv, words, message)) {
         if (error != nullptr) {
             *error = message;
         }
         return std::nullopt;
     }
-    return from_words(std::move(words));
+    return from_words(std::move(words), index);
+}
+
+std::optional<Dictionary> Dictionary::create(std::string* error) {
+    return from_tsv(dict::embedded_word_list(), Index::fast, error);
+}
+
+std::optional<Dictionary> Dictionary::from_file(const std::string& path, Index index,
+                                                std::string* error) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        if (error != nullptr) {
+            *error = "cannot open " + path;
+        }
+        return std::nullopt;
+    }
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    const std::string text = buffer.str();
+    if (!in.eof() && in.bad()) {
+        if (error != nullptr) {
+            *error = "cannot read " + path;
+        }
+        return std::nullopt;
+    }
+    return from_tsv(text, index, error);
 }
 
 std::vector<SuggestWord> Dictionary::match(std::u32string_view spliced) const {
@@ -182,7 +229,7 @@ std::vector<SuggestWord> Dictionary::match(std::u32string_view spliced) const {
         return {};
     }
     dict::Trie::Result found;
-    impl_->trie.search(spliced, found);
+    impl_->search(spliced, found);
 
     dict::ScoreMarker marker(spliced);
     marker.reserve(found.words.size());
@@ -191,11 +238,10 @@ std::vector<SuggestWord> Dictionary::match(std::u32string_view spliced) const {
     // The index reports the hits of the one subtree that can survive the
     // filter; the maxima above already cover the rest.
     for (std::uint32_t index : found.words) {
-        const Word& w = impl_->words[index];
         SuggestWord sw;
-        sw.str = w.str;
-        sw.length = static_cast<int>(w.str.size());
-        sw.frequency = w.frequency;
+        sw.str = ZString(impl_->words.text(index));
+        sw.length = static_cast<int>(sw.str.size());
+        sw.frequency = impl_->words.frequency(index);
         sw.levenshtein_d = sw.length - static_cast<int>(spliced.size());
         marker.add(std::move(sw));
     }
@@ -220,14 +266,13 @@ std::vector<SuggestWord> Dictionary::match_bk_reference(std::u32string_view spli
         hits.clear();
         tree.match(spliced, static_cast<int>(key_length - len), hits);
         for (const dict::BkTree::Hit& hit : hits) {
-            const Word& w = impl_->words[hit.word];
-            marker.observe_frequency(w.frequency);
-            marker.observe_length(static_cast<int>(w.str.size()));
             SuggestWord sw;
-            sw.str = w.str;
-            sw.length = static_cast<int>(w.str.size());
-            sw.frequency = w.frequency;
+            sw.str = ZString(impl_->words.text(hit.word));
+            sw.length = static_cast<int>(sw.str.size());
+            sw.frequency = impl_->words.frequency(hit.word);
             sw.levenshtein_d = hit.distance;
+            marker.observe_frequency(sw.frequency);
+            marker.observe_length(sw.length);
             marker.add(std::move(sw));
         }
     }

@@ -80,10 +80,32 @@ struct Word {
 // and so that this class stays a pure function of its inputs.
 class Dictionary {
 public:
+    // Which index to build over the words. Both find exactly the same
+    // words with the same metrics; a test asserts it.
+    enum class Index {
+        // A trie: microseconds per lookup, about 900 bytes per word.
+        // Right for the dictionary behind every keystroke.
+        fast,
+        // Buckets scanned by (length, first code point): milliseconds per
+        // lookup, about 55 bytes per word. Right for a large pack that is
+        // only consulted when the main dictionary has nothing to say --
+        // 461,182 words cost 100 MB as a trie and 25 MB this way.
+        compact,
+    };
+
     // The 38,743 words compiled into the library.
     static std::optional<Dictionary> create(std::string* error = nullptr);
+    // A word list in the format of data/dictionary.tsv: '#' comments, then
+    // `word<TAB>frequency` lines. Used for the optional extension pack
+    // (tools/extract_dictionary.py --extension) and for a host's own list.
+    static std::optional<Dictionary> from_file(const std::string& path,
+                                               Index index = Index::compact,
+                                               std::string* error = nullptr);
+    static std::optional<Dictionary> from_tsv(std::string_view tsv,
+                                              Index index = Index::fast,
+                                              std::string* error = nullptr);
     // An arbitrary word list, for tests and for extension packs.
-    static Dictionary from_words(std::vector<Word> words);
+    static Dictionary from_words(std::vector<Word> words, Index index = Index::fast);
 
     Dictionary(Dictionary&&) noexcept;
     Dictionary& operator=(Dictionary&&) noexcept;
@@ -128,6 +150,24 @@ public:
     // makeWord(): severe and fuzzy merged, the original's way round.
     std::vector<ZString> make_word(std::string_view latin) const;
 
+    // An optional second dictionary, consulted only when the first one
+    // answers with nothing at all.
+    //
+    // It is a fallback and not a second source because of what that buys:
+    // where the main dictionary has anything to say, the answer is the
+    // original's, unchanged; where it has nothing, so has the original, so
+    // filling in cannot contradict it. The one place it is visible is
+    // make_word(), which merges severe results with fuzzy ones: an input
+    // whose fuzzy half was empty but whose severe half was not now gains
+    // words the original does not return. Turning the extension off restores
+    // the original's answer everywhere.
+    //
+    // Measured on the prefixes of real words: 27.5% get nothing from the
+    // main dictionary, and the 461,182-word pack rescues a third of those,
+    // with 5.4 candidates on average. The pack must outlive the Ime.
+    void set_extension(const Dictionary* extension);
+    const Dictionary* extension() const;
+
     // The original caches spliced sequences that matched nothing, in MySQL,
     // so later requests skip them. It cannot change a result -- a sequence is
     // only cached after it came back empty -- so it is in memory here and can
@@ -136,6 +176,9 @@ public:
     void clear_negative_cache();
 
 private:
+    std::vector<SuggestWord> fuzzy_make_word_in(std::string_view latin,
+                                                const Dictionary* dictionary) const;
+
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

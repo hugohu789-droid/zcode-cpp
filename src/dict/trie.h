@@ -40,14 +40,16 @@
 #include <string_view>
 #include <vector>
 
+#include "dict/word_store.h"
 #include "zcode/dictionary.h"
 
 namespace zcode::dict {
 
 class Trie {
 public:
-    // `words` must be sorted by `str` and free of duplicates.
-    static Trie build(const std::vector<Word>& words);
+    // `words` must be sorted and free of duplicates, and must outlive
+    // the trie.
+    static Trie build(const WordStore& words);
 
     struct Result {
         // Indices into the word list, for the hits that can survive the
@@ -79,7 +81,7 @@ private:
     std::vector<std::uint64_t> max_freq_;     // highest frequency in this subtree
     std::vector<std::uint64_t> charset_;      // code points occurring in this subtree
 
-    const std::vector<Word>* words_ = nullptr;
+    const WordStore* words_ = nullptr;
     std::vector<char32_t> symbols_;  // distinct code points, ascending
 };
 

@@ -23,12 +23,12 @@ std::uint64_t Trie::symbol_mask(char32_t c) const {
     return std::uint64_t{1} << (static_cast<std::size_t>(it - symbols_.begin()) % kSymbolBits);
 }
 
-Trie Trie::build(const std::vector<Word>& words) {
+Trie Trie::build(const WordStore& words) {
     Trie t;
     t.words_ = &words;
 
-    for (const Word& w : words) {
-        for (char32_t c : w.str) {
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        for (char32_t c : words.text(i)) {
             t.symbols_.push_back(c);
         }
     }
@@ -58,16 +58,16 @@ Trie Trie::build(const std::vector<Word>& words) {
         const std::uint32_t self = static_cast<std::uint32_t>(t.first_child_.size()) - 1;
 
         std::uint32_t i = p.begin;
-        if (i < p.end && words[i].str.size() == p.depth) {
+        if (i < p.end && words.length(i) == p.depth) {
             t.word_[self] = i;
             ++i;
         }
 
         // Each run of equal code points at this depth becomes one child.
         while (i < p.end) {
-            const char32_t c = words[i].str[p.depth];
+            const char32_t c = words.text(i)[p.depth];
             std::uint32_t j = i;
-            while (j < p.end && words[j].str[p.depth] == c) {
+            while (j < p.end && words.text(j)[p.depth] == c) {
                 ++j;
             }
             t.ch_.push_back(c);
@@ -87,9 +87,9 @@ Trie Trie::build(const std::vector<Word>& words) {
     t.charset_.assign(n, 0);
     for (std::size_t v = n; v-- > 0;) {
         if (t.word_[v] != kNoWord) {
-            const Word& w = words[t.word_[v]];
-            t.max_len_[v] = static_cast<std::uint8_t>(std::min<std::size_t>(w.str.size(), 255));
-            t.max_freq_[v] = w.frequency;
+            t.max_len_[v] =
+                static_cast<std::uint8_t>(std::min<std::size_t>(words.length(t.word_[v]), 255));
+            t.max_freq_[v] = words.frequency(t.word_[v]);
         }
         for (std::uint32_t c = t.first_child_[v]; c < t.first_child_[v + 1]; ++c) {
             t.max_len_[v] = std::max(t.max_len_[v], t.max_len_[c]);
@@ -123,7 +123,7 @@ void Trie::search(std::u32string_view query, Result& out) const {
         needed[p] = needed[p + 1] | bit;
     }
 
-    const std::vector<Word>& words = *words_;
+    const WordStore& words = *words_;
 
     // `collect` walks the one root subtree whose words can survive the
     // JaroWinkler filter and keeps them; `bound` walks the rest, which can
@@ -131,7 +131,7 @@ void Trie::search(std::u32string_view query, Result& out) const {
     // subtree as soon as it cannot.
     struct Walk {
         const Trie& t;
-        const std::vector<Word>& words;
+        const WordStore& words;
         std::u32string_view query;
         const std::vector<std::uint64_t>& needed;
         std::size_t len;
@@ -140,9 +140,9 @@ void Trie::search(std::u32string_view query, Result& out) const {
 
         void visit(std::uint32_t v, std::size_t depth, std::size_t matched, bool collect) {
             if (t.word_[v] != kNoWord && matched == len && depth >= len && depth < window_end) {
-                const Word& w = words[t.word_[v]];
                 out.max_length = std::max(out.max_length, static_cast<int>(depth));
-                out.max_frequency = std::max(out.max_frequency, w.frequency);
+                out.max_frequency =
+                    std::max(out.max_frequency, words.frequency(t.word_[v]));
                 if (collect) {
                     out.words.push_back(t.word_[v]);
                 }

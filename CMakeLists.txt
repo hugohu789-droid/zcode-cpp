@@ -36,6 +36,7 @@ add_library(zcode
     src/decomposer.cpp
     src/dict/dictionary.cpp
     src/dict/ime.cpp
+    src/dict/scan_index.cpp
     src/dict/trie.cpp
     src/dict/word_data_embedded.cpp
     src/engine.cpp

@@ -78,6 +78,12 @@ public:
     // is still returned so the caller can write it before closing.
     std::string handle(std::string_view line, bool* quit = nullptr);
 
+    // The service layer, so a host can attach an extension pack to it.
+    // Throws nothing; the reference is valid only when a dictionary was
+    // given to the constructor, which has_dictionary() reports.
+    bool has_dictionary() const;
+    Ime& ime();
+
 private:
     struct State;
     std::unique_ptr<State> state_;

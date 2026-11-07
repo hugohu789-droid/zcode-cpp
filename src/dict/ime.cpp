@@ -29,10 +29,18 @@ struct ZStringHash {
 struct Ime::Impl {
     const Engine* engine;
     const Dictionary* dictionary;
+    const Dictionary* extension = nullptr;
 
     bool negative_cache_enabled = true;
     mutable std::mutex mutex;
+    // One set per dictionary: a sequence the main dictionary does not know
+    // may well be in the extension pack.
     mutable std::unordered_set<ZString, ZStringHash> negative;
+    mutable std::unordered_set<ZString, ZStringHash> negative_extension;
+
+    std::unordered_set<ZString, ZStringHash>& cache_for(const Dictionary* which) const {
+        return which == extension ? negative_extension : negative;
+    }
 };
 
 Ime::Ime(const Engine& engine, const Dictionary& dictionary) : impl_(std::make_unique<Impl>()) {
@@ -48,13 +56,25 @@ void Ime::set_negative_cache_enabled(bool enabled) {
     impl_->negative_cache_enabled = enabled;
     if (!enabled) {
         impl_->negative.clear();
+        impl_->negative_extension.clear();
     }
 }
 
 void Ime::clear_negative_cache() {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     impl_->negative.clear();
+    impl_->negative_extension.clear();
 }
+
+void Ime::set_extension(const Dictionary* extension) {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    impl_->extension = extension;
+    // The cache records "this dictionary knows nothing about that
+    // sequence". Changing which dictionaries there are makes that stale.
+    impl_->negative_extension.clear();
+}
+
+const Dictionary* Ime::extension() const { return impl_->extension; }
 
 std::vector<ZString> Ime::severe_make_word(std::string_view latin) const {
     // severeMakeWord(): the blank guard, decompose, splice each
@@ -63,6 +83,17 @@ std::vector<ZString> Ime::severe_make_word(std::string_view latin) const {
 }
 
 std::vector<SuggestWord> Ime::fuzzy_make_word(std::string_view latin) const {
+    std::vector<SuggestWord> words = fuzzy_make_word_in(latin, impl_->dictionary);
+    if (words.empty() && impl_->extension != nullptr) {
+        // Nothing at all from the main dictionary -- which is also what the
+        // original would have answered -- so there is nothing to contradict.
+        words = fuzzy_make_word_in(latin, impl_->extension);
+    }
+    return words;
+}
+
+std::vector<SuggestWord> Ime::fuzzy_make_word_in(std::string_view latin,
+                                                 const Dictionary* dictionary) const {
     if (is_blank(latin)) {
         return {};
     }
@@ -92,15 +123,15 @@ std::vector<SuggestWord> Ime::fuzzy_make_word(std::string_view latin) const {
         for (const ZString& sequence : spliced) {
             if (impl_->negative_cache_enabled) {
                 std::lock_guard<std::mutex> lock(impl_->mutex);
-                if (impl_->negative.count(sequence) != 0) {
+                if (impl_->cache_for(dictionary).count(sequence) != 0) {
                     continue;
                 }
             }
-            std::vector<SuggestWord> part = impl_->dictionary->match(sequence);
+            std::vector<SuggestWord> part = dictionary->match(sequence);
             if (part.empty()) {
                 if (impl_->negative_cache_enabled) {
                     std::lock_guard<std::mutex> lock(impl_->mutex);
-                    impl_->negative.insert(sequence);
+                    impl_->cache_for(dictionary).insert(sequence);
                 }
                 continue;
             }
