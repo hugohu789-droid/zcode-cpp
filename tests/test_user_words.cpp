@@ -153,6 +153,49 @@ TEST_F(UserWordsTest, ATickInThePastIsNotABonusMultiplier) {
     EXPECT_EQ(store.bonus(word, 100), store.bonus(word, 500));
 }
 
+// Pinned because it decides how long one stray choice stays in front of
+// words the user actually uses more often: at a half-life of 30 a single
+// commit leads for about 73 days, at 10 for about 24.
+TEST_F(UserWordsTest, TheDefaultsAreTheOnesTheHostInherits) {
+    const UserWords::Options defaults = UserWords().options();
+    EXPECT_EQ(defaults.weight, 1.0F);
+    EXPECT_EQ(defaults.half_life, 10.0F);
+    EXPECT_EQ(defaults.saturation, 2.0F);
+}
+
+TEST_F(UserWordsTest, EachOptionMovesWhatItSays) {
+    const ZString word(kInDictionary);
+    const auto bonus_with = [&word](UserWords::Options options, int uses,
+                                    std::uint64_t days) {
+        UserWords store(options);
+        for (int i = 0; i < uses; ++i) store.learn(word, 0);
+        return store.bonus(word, days);
+    };
+    UserWords::Options base;
+
+    // weight scales everything, and zero turns the habit off.
+    UserWords::Options heavier = base;
+    heavier.weight = 2.0F;
+    EXPECT_NEAR(bonus_with(heavier, 3, 0), 2 * bonus_with(base, 3, 0), 1e-5F);
+    UserWords::Options off = base;
+    off.weight = 0;
+    EXPECT_EQ(bonus_with(off, 3, 0), 0.0F);
+
+    // saturation decides how much the first use is worth.
+    UserWords::Options eager = base;
+    eager.saturation = 1.0F;
+    UserWords::Options cautious = base;
+    cautious.saturation = 8.0F;
+    EXPECT_GT(bonus_with(eager, 1, 0), bonus_with(base, 1, 0));
+    EXPECT_LT(bonus_with(cautious, 1, 0), bonus_with(base, 1, 0));
+
+    // half_life decides how fast it goes away, and not how big it starts.
+    UserWords::Options forgetful = base;
+    forgetful.half_life = 2.0F;
+    EXPECT_EQ(bonus_with(forgetful, 3, 0), bonus_with(base, 3, 0));
+    EXPECT_LT(bonus_with(forgetful, 3, 10), bonus_with(base, 3, 10));
+}
+
 TEST_F(UserWordsTest, MatchUsesTheDictionarysOwnRule) {
     UserWords store;
     const ZString word(kInDictionary);  // six code points

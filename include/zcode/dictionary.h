@@ -112,11 +112,27 @@ public:
     };
 
     struct Options {
-        // How much a fully established habit may add to a score of at most 1.
+        // How much a fully established habit may add to a score of at most
+        // 1. At 1.0 a settled habit outranks anything the dictionary alone
+        // can offer; at 0.1 it only breaks near-ties; at 0 the habit is off
+        // and the user's own words are still offered, just not lifted.
         float weight = 1.0F;
-        // Ticks after which an unused word's bonus halves.
-        float half_life = 30.0F;
+        // Ticks after which an unused word's bonus halves. The unit is the
+        // host's, and days is the natural one.
+        //
+        // 10 rather than something longer because of how far one use
+        // reaches: a single commit gives 0.333, and a word the dictionary
+        // scored 0.938 needs only 0.062 to lead, so at a half-life of 30 it
+        // would stay first for about 73 days. Two months in front of words
+        // the user actually uses more often is too long to call a habit; at
+        // 10 the same single use leads for about 24 days, which is long
+        // enough to be useful and short enough to be wrong harmlessly.
+        float half_life = 10.0F;
         // Damping on the count: at `saturation` uses the strength is 0.5.
+        // Smaller learns faster from the first use; larger wants to see a
+        // word several times first. The strength never reaches 1 at any
+        // setting, so a word used a hundred times cannot bury one used five
+        // times for good.
         float saturation = 2.0F;
     };
 

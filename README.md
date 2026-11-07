@@ -123,6 +123,9 @@ added to the score the dictionary gave, which is normalised to at most 1:
 bonus = weight * count/(count + saturation) * 0.5^((now - tick)/half_life)
 ```
 
+with `weight` 1.0 (the ceiling, against a dictionary score of at most 1),
+`half_life` 10 ticks and `saturation` 2 (uses at which the strength is half).
+
 So a settled habit outranks anything the dictionary alone can offer, a single
 old use only nudges, and a word left alone for long enough fades back to
 where the dictionary had it. A word **only** the user has is offered too,

@@ -161,6 +161,8 @@ back to persist them. Nothing here touches a disk or a clock.
 
 | Request | Meaning |
 |---|---|
+| `USER options <weight> <half_life> <saturation>` | The three habit settings, as a set. Plain decimal only -- no exponent, and no locale comma. |
+| `USER settings` | What they currently are. |
 | `USER now <tick>` | The host's clock now reads this. Habits decay against it. |
 | `USER learn <tick> <word>` | The user committed `<word>` at `<tick>`: one more use, as of then. Also sets "now". |
 | `USER restore <count> <tick> <word>` | Replay one stored entry. Replaying the same store twice is harmless -- the higher count and the later tick win -- so a restart does not look like use. |
@@ -176,10 +178,21 @@ A word the user has committed keeps its place in the dictionary's ranking and
 is lifted by how established the habit is:
 
 ```
-strength = count / (count + 2)
-decay    = 0.5 ^ ((now - tick) / 30)
-bonus    = 1.0 * strength * decay
+strength = count / (count + saturation)     # saturation 2
+decay    = 0.5 ^ ((now - tick) / half_life)  # half_life 10
+bonus    = weight * strength * decay         # weight 1.0
 ```
+
+| Setting | What it moves | Default |
+|---|---|---|
+| `weight` | The ceiling: how much a settled habit may add to a score of at most 1. `0` turns the habit off and still offers the user's own words. | 1.0 |
+| `half_life` | Ticks before an unused word's bonus halves. Smaller forgets faster. | 10 |
+| `saturation` | Uses at which the strength is half. Smaller learns faster from the first use; the strength never reaches 1 at any setting, so a word used a hundred times cannot bury one used five times for good. | 2 |
+
+A half-life of 10 rather than something longer because of how far one use
+reaches: a single commit is worth 0.333, and a word the dictionary scored
+0.938 needs only 0.062 to lead, so at 30 one stray choice would stay first
+for about 73 days. At 10 the same use leads for about 24.
 
 The dictionary's own score is normalised to at most 1, so a settled habit
 outranks anything the dictionary alone can offer and a single old use only
@@ -198,7 +211,8 @@ What a host does, in order: replay the store, keep the clock current, ask as
 usual, and record what the user picked.
 
 ```
-USER restore 4 730 <word>        # at startup, once per stored entry
+USER options 1.0 10.0 2.0        # at startup, before anything is ranked
+USER restore 4 730 <word>        # then once per stored entry
 USER now 931                     # today, so the decay is against today
 TYPE 0 b full 27                 # ... one per keystroke
 USER learn 931 <word>            # the user pressed space on this one

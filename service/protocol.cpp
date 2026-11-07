@@ -99,6 +99,57 @@ bool ParseUnsigned(std::string_view text, std::size_t* out) {
     return true;
 }
 
+// A non-negative float, for the habit settings. Written out rather than
+// using from_chars so that the same text parses the same way whatever the
+// host's locale is: a comma for a decimal point must be a rejection, not a
+// silently truncated number.
+bool ParseNonNegativeFloat(std::string_view text, float* out) {
+    if (text.empty()) return false;
+    std::size_t digits = 0;
+    std::size_t dots = 0;
+    for (const char c : text) {
+        if (c == '.') {
+            if (++dots > 1) return false;
+        } else if (c >= '0' && c <= '9') {
+            ++digits;
+        } else {
+            return false;
+        }
+    }
+    if (digits == 0) return false;
+    float value = 0;
+    float scale = 0;  // 0 until the point, then 0.1, 0.01, ...
+    for (const char c : text) {
+        if (c == '.') {
+            scale = 0.1F;
+            continue;
+        }
+        const auto digit = static_cast<float>(c - '0');
+        if (scale == 0) {
+            value = value * 10.0F + digit;
+        } else {
+            value += digit * scale;
+            scale /= 10.0F;
+        }
+    }
+    *out = value;
+    return true;
+}
+
+// The shortest text that reads back as the same float, with a fractional
+// digit kept so a setting always looks like a setting. Not java_float.h:
+// that lives in src/ and is for reproducing the original's output, while
+// this is the service talking about its own configuration.
+std::string FloatText(float value) {
+    char buffer[32];
+    const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value);
+    std::string text(buffer, result.ptr);
+    if (text.find('.') == std::string::npos && text.find('e') == std::string::npos) {
+        text += ".0";
+    }
+    return text;
+}
+
 // A field carrying a control character would break the line framing, so a
 // request carrying one is rejected rather than quietly stripped: stripping
 // would turn an injection attempt into a valid-looking request.
@@ -470,6 +521,27 @@ std::string Protocol::handle(std::string_view line, bool* quit, bool* dictionary
             state_->ime->set_user_words(&state_->user_words);
             return "OK";
         }
+        if (what == "options") {
+            // "USER options <weight> <half_life> <saturation>". All three
+            // together, because they only mean anything as a set.
+            std::string_view after_weight;
+            const std::string_view weight_text = NextToken(tail, &after_weight);
+            std::string_view after_half_life;
+            const std::string_view half_life_text =
+                NextToken(after_weight, &after_half_life);
+            const std::string_view saturation_text = Trim(after_half_life);
+            UserWords::Options options;
+            if (!ParseNonNegativeFloat(weight_text, &options.weight) ||
+                !ParseNonNegativeFloat(half_life_text, &options.half_life) ||
+                !ParseNonNegativeFloat(saturation_text, &options.saturation)) {
+                return Err("USER options takes weight, half_life and saturation");
+            }
+            if (options.half_life <= 0) {
+                return Err("half_life must be greater than zero");
+            }
+            state_->user_words.set_options(options);
+            return "OK";
+        }
         if (what == "forget") {
             if (tail.empty()) return Err("USER forget takes a word");
             ZString word;
@@ -480,6 +552,12 @@ std::string Protocol::handle(std::string_view line, bool* quit, bool* dictionary
         if (what == "clear") {
             state_->user_words.clear();
             return "OK";
+        }
+        if (what == "settings") {
+            const UserWords::Options& o = state_->user_words.options();
+            return Ok({"weight", FloatText(o.weight), "half_life",
+                       FloatText(o.half_life), "saturation",
+                       FloatText(o.saturation)});
         }
         if (what == "list") {
             // One item per entry, in the same "text,key:value" shape a
@@ -492,7 +570,7 @@ std::string Protocol::handle(std::string_view line, bool* quit, bool* dictionary
             }
             return Ok(items);
         }
-        return Err("USER takes now, learn, restore, forget, clear or list");
+        return Err("USER takes options, now, learn, restore, forget, clear or list");
     }
 
     if (command == "DICT") {

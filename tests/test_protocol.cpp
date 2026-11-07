@@ -449,6 +449,35 @@ TEST_F(ProtocolDictionaryTest, ClearPutsTheAnswerBack) {
         << "clearing restores the original's answer exactly";
 }
 
+TEST_F(ProtocolDictionaryTest, OptionsAreReadableAndSettable) {
+    EXPECT_EQ(Send("USER settings"),
+              "OK\tweight\t1.0\thalf_life\t10.0\tsaturation\t2.0");
+    EXPECT_EQ(Send("USER options 0.5 2.5 4"), "OK");
+    EXPECT_EQ(Send("USER settings"),
+              "OK\tweight\t0.5\thalf_life\t2.5\tsaturation\t4.0");
+
+    // And they take effect: weight 0 leaves the habit flat.
+    const std::vector<std::string> before = Fields(Type("bagsi", "word", "9"));
+    ASSERT_GT(before.size(), 3U);
+    EXPECT_EQ(Send("USER options 0 10 2"), "OK");
+    Send("USER learn 100 " + before[3]);
+    EXPECT_EQ(Fields(Type("bagsi", "word", "9")), before);
+    EXPECT_EQ(Send("USER options 1 10 2"), "OK");
+    EXPECT_EQ(Fields(Type("bagsi", "word", "9"))[1], before[3]);
+}
+
+TEST_F(ProtocolDictionaryTest, OptionsRejectWhatIsNotANumber) {
+    EXPECT_EQ(Fields(Send("USER options"))[0], "ERR");
+    EXPECT_EQ(Fields(Send("USER options 1.0 10"))[0], "ERR") << "all three";
+    EXPECT_EQ(Fields(Send("USER options 1,5 10 2"))[0], "ERR") << "locale comma";
+    EXPECT_EQ(Fields(Send("USER options -1 10 2"))[0], "ERR") << "negative";
+    EXPECT_EQ(Fields(Send("USER options 1 0 2"))[0], "ERR") << "half_life zero";
+    EXPECT_EQ(Fields(Send("USER options 1.0.0 10 2"))[0], "ERR");
+    EXPECT_EQ(Send("USER settings"),
+              "OK\tweight\t1.0\thalf_life\t10.0\tsaturation\t2.0")
+        << "and none of that changed anything";
+}
+
 TEST_F(ProtocolDictionaryTest, UserCommandsValidateBeforeChangingAnything) {
     EXPECT_EQ(Fields(Send("USER"))[0], "ERR");
     EXPECT_EQ(Fields(Send("USER sideways"))[0], "ERR");
