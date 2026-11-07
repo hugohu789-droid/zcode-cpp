@@ -23,6 +23,11 @@
 // than making the user wait mid-word. --preload-extension reads it at
 // startup instead, for a host that would rather pay once up front.
 //
+// "Answers with nothing" is the protocol layer's judgement, not a guess from
+// the request line (protocol.h). A host in `make` mode therefore rarely
+// triggers the load, because that mode merges the splicer's own shapes in and
+// so is rarely empty; --preload-extension is the answer for such a host.
+//
 // Exit status: 0 on clean end of input or QUIT, 1 when the engine's embedded
 // tables fail to load (which the test suite rules out).
 
@@ -120,16 +125,6 @@ private:
     std::unique_ptr<zcode::Dictionary> dictionary_;
 };
 
-// "OK" with no payload, in answer to a dictionary lookup, is the signal that
-// the compiled-in dictionary had nothing -- which is when the extension pack
-// is worth reading.
-bool empty_lookup(std::string_view request, std::string_view response) {
-    if (response != "OK") {
-        return false;
-    }
-    return request.rfind("LOOKUP", 0) == 0;
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -174,9 +169,13 @@ int main(int argc, char** argv) {
     std::string line;
     while (std::getline(std::cin, line)) {
         bool quit = false;
-        const std::string response = protocol.handle(line, &quit);
+        // The protocol layer reports a dictionary query that came back with
+        // nothing; that is the moment the pack is worth reading, and it knows
+        // which requests consulted the dictionary.
+        bool miss = false;
+        const std::string response = protocol.handle(line, &quit, &miss);
         std::cout << response << '\n' << std::flush;
-        if (extension != nullptr && empty_lookup(line, response)) {
+        if (extension != nullptr && miss) {
             extension->start();
         }
         if (quit) break;

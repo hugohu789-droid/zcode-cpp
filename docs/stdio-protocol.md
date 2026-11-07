@@ -46,6 +46,8 @@ shell one-liner, can therefore ignore session management and just use `0`.
 | `UNTYPE <sid> <mode> [max] [dedup]` | Pop a key **and** return the candidates. |
 | `SHAPE <mode> <latin>` | Stateless: shape a whole Latin string. No id. |
 | `DECOMPOSE <latin>` | Every way of splitting the input into layout keys. No id. |
+| `LOOKUP <what> <latin>` | Stateless dictionary lookup, named after the original's HTTP endpoints. No id, no cap. |
+| `DICT` | What dictionary is loaded. |
 | `QUIT` | End the conversation. The response is sent before the service exits. |
 
 An unknown or missing `<sid>` is an error and changes nothing. That holds for
@@ -69,15 +71,72 @@ OK
 A host should check this before trusting an engine binary, so a mismatch fails
 at startup rather than on a real request.
 
-`<mode>` is `severe` or `fuzzy`:
+### Modes
 
-* **severe** — full orthographic rules, the last letter in its final form. Use
-  for a word the user has finished.
-* **fuzzy** — relaxed rules, the last letter medial or final. Use while the
-  user is still typing, since it is a prefix search.
+`<mode>` selects what a query answers with. The first two are the splicer's
+own and answer with **letter shapes**; the other three go through the
+dictionary and answer with **words**, so they are rejected on a build that has
+none (`DICT` says which this is).
+
+| `<mode>` | Answers with | Equivalent stateless form |
+|---|---|---|
+| `severe` | letter shapes, the last letter in its final form — for a word the user has finished | `SHAPE severe <latin>` |
+| `fuzzy` | letter shapes, the last letter medial or final — while the user is still typing, since it is a prefix search | `SHAPE fuzzy <latin>` |
+| `word` | dictionary words, best score first | `LOOKUP fuzzy <latin>` |
+| `score` | the same words, each with every metric behind its ranking | `LOOKUP score <latin>` |
+| `make` | `severe` shapes and dictionary words merged | `LOOKUP make <latin>` |
+| `full` | `score`, then the `severe` shapes it does not already contain, written as scored items with the metrics zeroed | none |
+
+A host picks one mode and stays with it; which one is the host's policy, not
+the engine's. Paiza's input profile carries it as `engine_mode`.
+
+**An interactive host wants `full`.** The dictionary holds 38,743 words, so
+`word` and `score` answer with nothing whenever someone types a word that is
+not among them -- a blank candidate window and nothing to commit, which is
+how an input method must never behave. `full` appends the splicer's own
+reading of what was typed for exactly that case, with the metrics zeroed so
+the shapes sort below every real word on the host's one scale. `score` stays
+as it is because it is what `/ime/fuzzy/score/{key}` answers, which is what
+the comparison harness checks against the original.
+
+An item in `score` mode is the word, then its metrics, exactly as the
+original's `SuggestWord.toString()` writes them:
+
+```
+<word>,frequency:110487,frequencyScore:1.0,levenshteinD:0,levenshteinScore:0.8181818,jaroWinklerScore:3.0,score:1.0
+```
+
+The word ends at the first comma — unambiguous, because ZCode is
+`U+1865..U+18AA` and so can contain neither a comma nor a colon. The floats
+are formatted the way Java's `Float.toString()` formats them, so a host
+diffing this against the original service sees no spurious differences.
+
+A dictionary mode takes the session's keys joined back into the Latin string
+and decomposes that itself, so a host may push keys in any grouping.
 
 `[max]` caps the number of candidates (`0` = no cap) and `[dedup]` is `0` or
-`1`. Both default to the library's `Options` defaults.
+`1`. Both default to the library's `Options` defaults and both apply in every
+mode. **`max` matters most in `score`**: a few hundred words each carrying six
+metrics is a response of well over 100 KB, and a host is right to treat a
+response that size as a protocol error. The shaping modes apply the cap before
+building the list; a dictionary mode cannot, because the ranking needs every
+match before it knows which are best, so there the cap truncates the ranked
+list — the words kept are the best ones, in order.
+
+### LOOKUP
+
+`LOOKUP <what> <latin>` is the stateless form of the three dictionary modes,
+with `<what>` named after the original service's endpoints so the two can be
+compared answer for answer:
+
+| `<what>` | Original endpoint |
+|---|---|
+| `make` | `/ime/{key}` |
+| `fuzzy` | `/ime/fuzzy/{key}` |
+| `score` | `/ime/fuzzy/score/{key}` |
+| `severe` | `/ime/severe/{key}` (no dictionary; same as `SHAPE severe`) |
+
+It takes no cap, so a host should prefer `TYPE`/`CAND`.
 
 ## Responses
 
@@ -153,8 +212,13 @@ OK
 * `CAND` and `SHAPE` agree for the same keys; a test pins that, so a host may
   use `SHAPE` to re-check a finished word.
 * Ask for `max` roughly equal to what the candidate window shows. The engine
-  can produce very many candidates for a long word, and the cap is applied
-  before the list is built.
+  can produce very many candidates for a long word. In the shaping modes the
+  cap is applied before the list is built; in the dictionary modes it
+  truncates the ranked list, and in `score` mode it is what keeps the response
+  inside a sane size.
+* Prefer `score` over `word` if the host ranks engine candidates against
+  candidates of its own: it is the same list, and the `score:` field is what
+  the ranking actually used, so the host need not infer it from the order.
 * One process serves any number of sessions. Open one per input context and
   close it when the context goes away, or just use session 0 if there is only
   ever one.

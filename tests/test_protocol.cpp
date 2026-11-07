@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "zcode/dictionary.h"
 #include "zcode/zcode.h"
 
 namespace zcode::service {
@@ -269,6 +270,205 @@ TEST_F(ProtocolTest, TypeAndUntypeNeedAValidSessionAndMode) {
 TEST_F(ProtocolTest, UntypeOnEmptySessionIsHarmless) {
     EXPECT_EQ(Send("UNTYPE 0 fuzzy"), "OK");
     EXPECT_EQ(Send("KEYS 0"), "OK");
+}
+
+// ---- the dictionary modes ------------------------------------------------
+//
+// A session query may ask for dictionary words instead of letter shapes. This
+// build has a dictionary, so a second fixture gives the protocol one; the
+// fixture above deliberately has none, which is how the rejection path above
+// gets tested.
+
+class ProtocolDictionaryTest : public ::testing::Test {
+protected:
+    ProtocolDictionaryTest() {
+        std::string error;
+        auto created = Engine::create(&error);
+        EXPECT_TRUE(created.has_value()) << error;
+        engine_ = std::move(created);
+        auto dictionary = Dictionary::create(&error);
+        EXPECT_TRUE(dictionary.has_value()) << error;
+        dictionary_ = std::move(dictionary);
+        protocol_ = std::make_unique<Protocol>(*engine_, &dictionary_.value());
+    }
+
+    std::string Send(std::string_view line, bool* miss = nullptr) {
+        return protocol_->handle(line, nullptr, miss);
+    }
+
+    // Types `latin` into an empty session one key at a time and returns the
+    // last answer, which is how a host drives this: one TYPE per keystroke.
+    std::string Type(std::string_view latin, std::string_view mode,
+                     std::string_view args = "") {
+        std::string response = Send("CLEAR 0");
+        for (const char c : latin) {
+            std::string request = "TYPE 0 ";
+            request += c;
+            request += ' ';
+            request.append(mode);
+            if (!args.empty()) {
+                request += ' ';
+                request.append(args);
+            }
+            response = Send(request);
+        }
+        return response;
+    }
+
+    std::optional<Engine> engine_;
+    std::optional<Dictionary> dictionary_;
+    std::unique_ptr<Protocol> protocol_;
+};
+
+// The point of the whole exercise: a host that asks for "score" gets the
+// words with every metric behind the ranking, so it can rank them against
+// its own sources instead of trusting the order.
+TEST_F(ProtocolDictionaryTest, ScoreModeCarriesEveryMetric) {
+    const std::vector<std::string> fields = Fields(Type("bagsi", "score", "9"));
+    ASSERT_EQ(fields[0], "OK");
+    ASSERT_GT(fields.size(), 1U);
+    for (std::size_t i = 1; i < fields.size(); ++i) {
+        const std::string& item = fields[i];
+        EXPECT_NE(item.find(",frequency:"), std::string::npos) << item;
+        EXPECT_NE(item.find(",frequencyScore:"), std::string::npos) << item;
+        EXPECT_NE(item.find(",levenshteinD:"), std::string::npos) << item;
+        EXPECT_NE(item.find(",levenshteinScore:"), std::string::npos) << item;
+        EXPECT_NE(item.find(",jaroWinklerScore:"), std::string::npos) << item;
+        EXPECT_NE(item.find(",score:"), std::string::npos) << item;
+        // The word comes first and ends at the first comma: ZCode is
+        // U+1865..U+18AA, so a comma cannot occur inside it.
+        EXPECT_GT(item.find(','), 0U) << item;
+    }
+}
+
+// A session mode must answer exactly what the stateless form answers, or a
+// host would get different words depending on how it asked.
+TEST_F(ProtocolDictionaryTest, SessionModesAgreeWithLookup) {
+    EXPECT_EQ(Type("bagsi", "word"), Send("LOOKUP fuzzy bagsi"));
+    EXPECT_EQ(Type("bagsi", "score"), Send("LOOKUP score bagsi"));
+    EXPECT_EQ(Type("bagsi", "make"), Send("LOOKUP make bagsi"));
+    EXPECT_EQ(Type("ene", "score"), Send("LOOKUP score ene"));
+}
+
+// The cap is what keeps a scored answer inside a host's response limit: the
+// uncapped answer for some inputs is well over 100 KB.
+TEST_F(ProtocolDictionaryTest, MaxCapsAScoredAnswerAndKeepsTheBestOnes) {
+    const std::string capped = Type("ene", "score", "9");
+    const std::vector<std::string> fields = Fields(capped);
+    ASSERT_EQ(fields[0], "OK");
+    EXPECT_EQ(fields.size(), 10U);  // OK plus nine items
+    EXPECT_LT(capped.size(), 2048U);
+
+    const std::vector<std::string> all = Fields(Type("ene", "score"));
+    ASSERT_GT(all.size(), 10U);
+    // Capping is a truncation of the ranked list, so the nine kept are the
+    // nine best, in the same order.
+    for (std::size_t i = 1; i < fields.size(); ++i) {
+        EXPECT_EQ(fields[i], all[i]);
+    }
+}
+
+TEST_F(ProtocolDictionaryTest, UntypeAndCandUseTheModeToo) {
+    Type("bagsi", "score", "9");
+    // Uncapped, because LOOKUP takes no cap of its own.
+    EXPECT_EQ(Send("CAND 0 score"), Send("LOOKUP score bagsi"));
+    // Backspace: the answer must be the one for the shorter input.
+    EXPECT_EQ(Send("UNTYPE 0 score"), Send("LOOKUP score bags"));
+}
+
+// Shapes and words are different answers to the same keys; a host picks one.
+TEST_F(ProtocolDictionaryTest, ShapeModesStillAnswerWithShapes) {
+    EXPECT_EQ(Type("bagsi", "fuzzy"), Send("SHAPE fuzzy bagsi"));
+    EXPECT_EQ(Type("bagsi", "severe"), Send("SHAPE severe bagsi"));
+}
+
+TEST_F(ProtocolDictionaryTest, EmptySessionLooksNothingUp) {
+    bool miss = false;
+    EXPECT_EQ(Send("CAND 0 score 9", &miss), "OK");
+    // Nothing was asked of the dictionary, so this is not a miss: an
+    // extension pack would be no help.
+    EXPECT_FALSE(miss);
+}
+
+// What drives the optional extension pack's lazy load.
+TEST_F(ProtocolDictionaryTest, AMissIsReportedOnlyWhenTheDictionaryHadNothing) {
+    bool miss = true;
+    EXPECT_EQ(Fields(Send("LOOKUP score bagsi", &miss))[0], "OK");
+    EXPECT_FALSE(miss);
+
+    // "bicig" is a real word the original's vocabulary does not hold.
+    EXPECT_EQ(Send("LOOKUP score bicig", &miss), "OK");
+    EXPECT_TRUE(miss);
+
+    // The session modes report it the same way, which is what a host in
+    // "score" mode relies on.
+    miss = false;
+    Type("bicig", "score", "9");
+    EXPECT_EQ(Send("CAND 0 score 9", &miss), "OK");
+    EXPECT_TRUE(miss);
+}
+
+TEST_F(ProtocolDictionaryTest, SevereLookupIsNeverAMiss) {
+    bool miss = true;
+    // No dictionary is consulted, so an empty answer says nothing about it.
+    Send("LOOKUP severe bagsi", &miss);
+    EXPECT_FALSE(miss);
+}
+
+// What an interactive host actually uses. "score" alone goes blank on a word
+// the 38,743-word dictionary does not hold, which for an input method means
+// a candidate window with nothing in it.
+TEST_F(ProtocolDictionaryTest, FullIsScoreThatIsNeverEmpty) {
+    // In the vocabulary: "full" is "score" plus any severe shape it lacks.
+    const std::vector<std::string> score = Fields(Type("bagsi", "score"));
+    const std::vector<std::string> full = Fields(Type("bagsi", "full"));
+    ASSERT_GE(full.size(), score.size());
+    for (std::size_t i = 0; i < score.size(); ++i) {
+        EXPECT_EQ(full[i], score[i]) << i;
+    }
+
+    // Not in the vocabulary: "score" is empty where "full" still answers.
+    EXPECT_EQ(Type("surghaghuli", "score"), "OK");
+    const std::vector<std::string> rescued = Fields(Type("surghaghuli", "full"));
+    ASSERT_GT(rescued.size(), 1U);
+    // And what it answers with is exactly the severe shapes.
+    const std::vector<std::string> shapes =
+        Fields(Send("LOOKUP severe surghaghuli"));
+    EXPECT_EQ(rescued.size(), shapes.size());
+    for (std::size_t i = 1; i < rescued.size(); ++i) {
+        EXPECT_EQ(rescued[i].substr(0, rescued[i].find(',')), shapes[i]) << i;
+    }
+}
+
+// Every item is scored, so a host has one scale; a shape scores below any
+// real word.
+TEST_F(ProtocolDictionaryTest, FullScoresTheShapesZero) {
+    for (const std::string& item : Fields(Type("surghaghuli", "full"))) {
+        if (item == "OK") continue;
+        EXPECT_NE(item.find(",score:0.0"), std::string::npos) << item;
+    }
+    bool saw_a_real_score = false;
+    for (const std::string& item : Fields(Type("bagsi", "full"))) {
+        if (item == "OK") continue;
+        if (item.find(",score:1.0") != std::string::npos) saw_a_real_score = true;
+    }
+    EXPECT_TRUE(saw_a_real_score);
+}
+
+// The optional extension pack is loaded when the dictionary comes up empty.
+// "full" answers anyway, so the miss has to be reported from the word list
+// rather than from the answer, or the pack would never load in the one mode
+// a host actually runs.
+TEST_F(ProtocolDictionaryTest, FullStillReportsADictionaryMiss) {
+    bool miss = false;
+    Type("bicig", "full", "9");
+    EXPECT_NE(Send("CAND 0 full 9", &miss), "OK");  // shapes came back
+    EXPECT_TRUE(miss);
+
+    miss = true;
+    Type("bagsi", "full", "9");
+    Send("CAND 0 full 9", &miss);
+    EXPECT_FALSE(miss);
 }
 
 }  // namespace

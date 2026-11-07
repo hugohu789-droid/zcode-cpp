@@ -28,9 +28,36 @@
 //   DICT                             what dictionary is loaded
 //   QUIT                             end the conversation
 //
-// <mode> is "severe" or "fuzzy". [max] is a candidate cap (0 = no cap) and
-// [dedup] is 0 or 1; both default to the Options defaults. An unknown <sid>
-// is an error and changes nothing.
+// <mode> selects what a session query answers with. The first two are the
+// splicer's own modes and answer with letter shapes; the other three go
+// through the dictionary and answer with words, so they are rejected when
+// this build has none:
+//
+//   severe  letter shapes, the last letter final (the word is finished)
+//   fuzzy   letter shapes, the last letter medial or final (still typing)
+//   word    dictionary words, best score first
+//   score   the same words, each with every metric behind its ranking
+//   make    severe shapes and dictionary words merged, as /ime/{key} does
+//   full    "score", then the severe shapes it does not already contain,
+//           written as scored items with the metrics zeroed -- so the answer
+//           carries every metric and is never empty
+//
+// A host picks one and stays with it; which one is the host's policy, not the
+// engine's. An interactive host wants "full": the dictionary holds 38,743
+// words, so the modes that answer with words alone leave the candidate
+// window blank whenever someone types one that is not among them. The dictionary modes take the session's keys joined back into the
+// Latin string and decompose it again themselves, so a host may push keys in
+// any grouping.
+//
+// [max] is a candidate cap (0 = no cap) and [dedup] is 0 or 1; both default
+// to the Options defaults and both apply in every mode. `max` matters most
+// in "score": a few hundred words each carrying six metrics is a response of
+// well over 100 KB, which a host is right to treat as a protocol error.
+// An unknown <sid> is an error and changes nothing.
+//
+// LOOKUP is the stateless form of the three dictionary modes above, named
+// after the original's HTTP endpoints so the two can be compared answer for
+// answer. It takes no cap, so prefer CAND/TYPE for a host.
 //
 // LOOKUP's <what> selects one of the three methods the original service
 // exposes over HTTP, and the names match those endpoints:
@@ -76,7 +103,15 @@ public:
     // Handles one request line and returns the response line, without the
     // terminating LF. Sets *quit when the client asked to stop; the response
     // is still returned so the caller can write it before closing.
-    std::string handle(std::string_view line, bool* quit = nullptr);
+    //
+    // Sets *dictionary_miss when the request did consult the dictionary and
+    // it had nothing to offer. That is the moment an optional extension pack
+    // is worth reading, and it is reported here rather than guessed from the
+    // request line, because which modes consult the dictionary is this
+    // layer's business. Note that `make` merges the splicer's own shapes in,
+    // so its answer is rarely empty and rarely reports a miss.
+    std::string handle(std::string_view line, bool* quit = nullptr,
+                       bool* dictionary_miss = nullptr);
 
     // The service layer, so a host can attach an extension pack to it.
     // Throws nothing; the reference is valid only when a dictionary was
