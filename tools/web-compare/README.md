@@ -18,19 +18,18 @@ files. Start it from `../ime-java-run` (see that directory's README).
 This library is the splicing engine only: no dictionary, no database. Of the
 Java service's four endpoints exactly one is the splicer and nothing else:
 
-| Java | comparable | against |
-|---|---|---|
-| `/ime/severe/{key}` | **yes** — `decompose` + `LetterSplicer.severe` | `SHAPE severe` |
-| `/ime/fuzzy/{key}` | no — splicer output used as BK-tree keys, dictionary words returned | — |
-| `/ime/fuzzy/score/{key}` | no — same, with the match metrics | — |
-| `/ime/{key}` | no — `severe` ∪ `fuzzy` | — |
+| Java | against |
+|---|---|
+| `/ime/severe/{key}` | `SHAPE severe` — `decompose` + `LetterSplicer.severe`, no dictionary |
+| `/ime/fuzzy/{key}` | `LOOKUP fuzzy` |
+| `/ime/fuzzy/score/{key}` | `LOOKUP score` — the words *and* every metric behind the ranking |
+| `/ime/{key}` | `LOOKUP make` — `severe` ∪ `fuzzy` |
 
-The splicer's **fuzzy** list is not exposed over HTTP at all, so the page
-compares it against `testdata/golden_e2e.tsv`, which `tools/golden-java`
-dumped from the unmodified Java sources. The three dictionary endpoints are
-still in the picker, Java-only, for a quick look at the original service.
-
-`decompose` compares `DECOMPOSE` against `testdata/golden_decompose.tsv`.
+All four compare against the live service. The splicer's own **fuzzy** list
+is not exposed over HTTP at all -- `/ime/fuzzy` puts it through the BK tree
+and returns dictionary words -- so that one is compared against
+`testdata/golden_e2e.tsv`, dumped by `tools/golden-java` from the unmodified
+Java sources. `decompose` likewise uses `testdata/golden_decompose.tsv`.
 
 ## Reading the verdict
 
@@ -38,7 +37,7 @@ Lists are compared **strictly**: same items, same order, same duplicates. A
 candidate may legitimately repeat (different shapes, same components), so the
 extras are a multiset difference, not a set one.
 
-Three outcomes:
+Four outcomes:
 
 * **完全一致** — every available side matches C++ exactly.
 * **只差在已知的原版 bug 上** (amber) — the *running* service differs but the
@@ -48,6 +47,13 @@ Three outcomes:
   comparisons rather than from a list of affected inputs, so it stays correct
   if the patch set changes. At the time of writing the whole golden
   vocabulary produces exactly one such input: `eme`.
+* **词和评分全同,只差同分次序** (amber) — the two lists hold the same words
+  with the same metrics and the same sequence of scores, so only words that
+  score equally have moved. That is the one declared difference: the
+  original leaves ties in its HashMap's bucket order, this port sorts them
+  by frequency and then by code point. The page proves it rather than
+  assuming it, by asking both sides for the scored list and comparing the
+  score sequences.
 * **有差异** (red) — anything else. That is the case worth looking at.
 
 Over 2000 candidates the dump keeps only a count and an FNV-1a digest instead
@@ -65,16 +71,36 @@ golden *files*, and nothing checks the *running* Java service against C++.
 
 Current result, full vocabulary:
 
-| | 一致 | 不一致 |
-|---|---:|---:|
-| severe, Java 服务 vs C++ | 604 | 1 (`eme`, the known fix) |
-| severe, golden vs C++ | 605 | 0 |
-| fuzzy, golden vs C++ | 605 | 0 |
-| decompose, golden vs C++ | 605 | 0 |
+| | 一致 | 不一致 | of which explained |
+|---|---:|---:|---|
+| severe, Java 服务 vs C++ | 604 | 1 | `eme`, the known fix |
+| severe, golden vs C++ | 605 | 0 | |
+| fuzzy 拼接, golden vs C++ | 605 | 0 | |
+| decompose, golden vs C++ | 605 | 0 | |
+| `/ime/fuzzy`, Java 服务 vs C++ | 532 | 73 | all 73 tie order |
+| `/ime/fuzzy/score`, Java 服务 vs C++ | 532 | 73 | all 73 tie order |
+| `/ime/{key}`, Java 服务 vs C++ | 535 | 70 | all 70 tie order |
+
+Nothing is unexplained: every difference is either one of the two
+documented fixes or the order of equally scored words.
 
 Five inputs are skipped in each run — empty, one space, two spaces, a tab,
 and `a<TAB>b` — because the stdio protocol rejects an empty argument and a
 control character rather than guessing.
+
+## 扩展词库
+
+The **扩展词库** switch turns on the optional 461,182-word pack
+(`python tools/extract_dictionary.py --extension`), which the engine
+consults only when the compiled-in dictionary answers with nothing. Turning
+it on restarts the engine process, because whether the pack is loaded is
+fixed at startup.
+
+With it off, the answers are the original's. With it on they are the
+original's wherever the original had any, plus words it does not have
+wherever it had none -- so it is the quick way to see what the pack buys
+without losing the ability to show the port matches. Try `bicig`: nothing
+from either side with the pack off, one word from the port with it on.
 
 ## The page
 
@@ -105,8 +131,11 @@ Useful from a shell too; all return the Java service's envelope shape.
 | | |
 |---|---|
 | `/api/info` | engine path and `HELLO`, whether the service is up, which golden files loaded |
-| `/api/compare/{severe,fuzzy,decompose}/{key}` | both sides and the verdict |
+| `/api/compare/{kind}/{key}` | both sides and the verdict |
 | `/api/batch/{kind}?limit=N&offset=M` | the vocabulary, summary and mismatches |
+| `/api/extension?on=0\|1` | load or unload the extension pack |
+
+`{kind}` is `severe`, `fuzzy`, `decompose`, `dictfuzzy`, `score` or `make`.
 | `/api/cpp/shape/{mode}/{key}`, `/api/cpp/decompose/{key}` | the C++ engine alone |
 | `/api/golden/{mode,decompose}/{key}` | the golden files alone |
 | `/api/words` | the golden vocabulary |

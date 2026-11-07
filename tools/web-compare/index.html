@@ -159,9 +159,9 @@
         <option value="severe">严格 severe &mdash; Java 服务 vs C++(可逐项对比)</option>
         <option value="fuzzy">fuzzy 拼接 &mdash; golden vs C++(可逐项对比)</option>
         <option value="decompose">分解 decompose &mdash; golden vs C++</option>
-        <option value="dict:/ime/">Java 词典 /ime/{key} &mdash; C++ 无对应</option>
-        <option value="dict:/ime/fuzzy/">Java 词典 /ime/fuzzy/{key} &mdash; C++ 无对应</option>
-        <option value="dict:/ime/fuzzy/score/">Java 词典 /ime/fuzzy/score/{key} &mdash; C++ 无对应</option>
+        <option value="dictfuzzy">词典 /ime/fuzzy/{key} &mdash; Java 服务 vs C++</option>
+        <option value="score">词典 /ime/fuzzy/score/{key} &mdash; 带全部评分</option>
+        <option value="make">词典 /ime/{key} &mdash; severe ∪ fuzzy</option>
       </select>
     </div>
     <div>
@@ -184,6 +184,13 @@
     <div>
       <label for="limit">最多显示</label>
       <input type="number" id="limit" value="60" min="1" max="500" step="10" style="width:76px">
+    </div>
+    <div>
+      <label for="ext">扩展词库</label>
+      <select id="ext">
+        <option value="0">关(与 Java 可比)</option>
+        <option value="1">开(+46 万低频词)</option>
+      </select>
     </div>
     <div>
       <label for="view">视图</label>
@@ -216,6 +223,9 @@
         <option value="severe">严格 severe(Java 服务 + golden vs C++)</option>
         <option value="fuzzy">fuzzy 拼接(golden vs C++)</option>
         <option value="decompose">分解 decompose(golden vs C++)</option>
+        <option value="dictfuzzy">词典 /ime/fuzzy(Java 服务 vs C++)</option>
+        <option value="score">词典 /ime/fuzzy/score(带全部评分)</option>
+        <option value="make">词典 /ime/{key}</option>
       </select>
     </div>
     <div>
@@ -257,10 +267,18 @@ var NOTES = {
   decompose:
     'Decomposer.decompose:把拉丁串切成键序列的所有切法。本身不含字形,' +
     '所以按等宽字体横排显示。',
-  dict:
-    'C++ 这边只移植了拼接引擎 —— 没有词典、没有数据库、没有线程池。' +
-    '这三个接口的结果来自 MySQL 里的 49 万条词,没有可对比的 C++ 一侧;' +
-    '列在这里是为了方便顺手看一眼原版服务的输出。'
+  dictfuzzy:
+    '词典接口。Java 这边是 MySQL 里 49 万条词建的 BK 树(实际只加载词频 >44 的 ' +
+    '38,743 条),C++ 这边是同一批词编译进二进制、用 trie 查。' +
+    '集合和评分应当完全一致;同分候选的次序可能不同 —— 原版那里是 HashMap 的桶序,' +
+    '这边按词频再按码位排。选"带全部评分"那一项可以当场看出差异是不是只在同分上。',
+  score:
+    '和上一项同一批结果,但带上排序用的每一个数:frequency、frequencyScore、' +
+    'levenshteinD、levenshteinScore、jaroWinklerScore、score。' +
+    '浮点数按 Java 的 Float.toString 格式打印,所以可以逐字符比对。',
+  make:
+    'makeWord = severe ∪ fuzzy,次序取自 fuzzy 那一侧,所以同分次序的差异会传到这里。' +
+    '另外 severe 一侧带着本项目修掉的两个原版 bug,受影响的输入这里也会不一样。'
 };
 
 var $ = function (id) { return document.getElementById(id); };
@@ -453,9 +471,11 @@ function renderVerdict(data) {
   var card = document.createElement('div');
   // A difference that only the live service shows, while the patched original
   // agrees with C++, is one of the two documented fixes -- amber, not red.
-  var patched = !v.same && v.sameExceptPatches;
-  card.className = 'verdict ' + (v.same ? 'same' : (patched ? '' : 'differ'));
-  if (patched) {
+  var ties = !v.same && v.sameExceptTies;
+  var patched = !v.same && !ties && v.sameExceptPatches;
+  var mild = ties || patched;
+  card.className = 'verdict ' + (v.same ? 'same' : (mild ? '' : 'differ'));
+  if (mild) {
     card.style.background = 'var(--warn-soft)';
     card.style.borderColor = '#fde293';
     card.style.color = 'var(--warn)';
@@ -480,10 +500,18 @@ function renderVerdict(data) {
       why.push('这是本项目修掉的原版 bug —— 打过补丁的原版(GOLD)和 C++ 一致,' +
                '在跑的服务是未修版。见 README“Deviations from the Java original”');
     }
+    if (p.tieOrder === true) {
+      why.push('两边的词和每一项评分都相同,分数序列也相同 —— 只是同分候选的次序不同,' +
+               '这是唯一一处声明过的偏差');
+    } else if (p.tieOrder === false) {
+      why.push('不只是同分次序:两边的评分对不上,值得查');
+    }
     return who + ':' + why.join(',');
   });
   card.innerHTML = '<span class="big">' +
-    (v.same ? '完全一致' : (patched ? '只差在已知的原版 bug 上' : '有差异')) +
+    (v.same ? '完全一致'
+            : (ties ? '词和评分全同,只差同分次序'
+                    : (patched ? '只差在已知的原版 bug 上' : '有差异'))) +
     '</span><div class="detail">' + lines.join('<br>') + '</div>';
   box.appendChild(card);
 }
@@ -504,15 +532,6 @@ function renderCompare(data) {
   });
 }
 
-function renderDictOnly(label, items, serverMs) {
-  $('verdict').innerHTML = '';
-  var box = $('results');
-  box.innerHTML = '';
-  box.appendChild(renderPane({
-    id: 'java', label: label, ok: true, obj: items, runTime: serverMs
-  }, false, null));
-}
-
 // ------------------------------------------------------------------- queries
 
 function query() {
@@ -522,26 +541,6 @@ function query() {
   $('go').disabled = true;
   setStatus('查询中…');
   var t0 = performance.now();
-
-  if (kind.indexOf('dict:') === 0) {
-    var path = kind.slice(5) + encodeURIComponent(key);
-    $('path').textContent = 'GET ' + path;
-    fetch(path).then(function (r) { return r.text(); }).then(function (text) {
-      $('raw').textContent = text;
-      var d = JSON.parse(text).data;
-      var items = Array.isArray(d) ? d : (d && d.obj) || [];
-      var ms = d && d.runTime !== undefined ? d.runTime : null;
-      last = { dict: kind.slice(5), items: items, ms: ms };
-      renderDictOnly('Java 服务 · ' + kind.slice(5) + '{key}', items, ms);
-      setStatus('候选 ' + items.length + ' 条' +
-                (ms !== null ? ',服务耗时 ' + ms + ' ms' : '') +
-                ',往返 ' + (performance.now() - t0).toFixed(0) + ' ms', 'ok');
-    }).catch(function (e) {
-      setStatus('请求失败: ' + e.message + '(Java 服务起了吗?)', 'err');
-      $('results').innerHTML = '<span class="empty">没有结果。</span>';
-    }).then(function () { $('go').disabled = false; });
-    return;
-  }
 
   var url = '/api/compare/' + kind + '/' + encodeURIComponent(key);
   $('path').textContent = 'GET ' + url;
@@ -567,9 +566,7 @@ function query() {
 }
 
 function rerender() {
-  if (!last) return;
-  if (last.dict) renderDictOnly('Java 服务 · ' + last.dict + '{key}', last.items, last.ms);
-  else renderCompare(last);
+  if (last) renderCompare(last);
 }
 
 // --------------------------------------------------------------------- batch
@@ -593,9 +590,12 @@ function batch() {
       var bad = 0;
       var summary = Object.keys(d.counts).map(function (k) {
         var c = d.counts[k];
-        bad += c.differ - (c.knownPatch || 0);
+        bad += c.differ - (c.knownPatch || 0) - (c.tieOrder || 0);
+        var why = [];
+        if (c.knownPatch) why.push(c.knownPatch + ' 项已知原版 bug');
+        if (c.tieOrder) why.push(c.tieOrder + ' 项只是同分次序');
         return k + ': 一致 ' + c.same + ',不一致 ' + c.differ +
-          (c.knownPatch ? '(其中 ' + c.knownPatch + ' 项是已知的原版 bug)' : '');
+          (why.length ? '(其中 ' + why.join('、') + ')' : '');
       });
       $('bstatus').className = 'status ' + (bad ? 'err' : 'ok');
       $('bstatus').textContent = d.tested + ' 个输入,' + d.elapsedMs + ' ms。' +
@@ -615,7 +615,8 @@ function batch() {
             '</td><td>' + m.countA + ' vs ' + m.countB + '</td><td>' +
             (m.firstDiff === null ? '—' : '第 ' + (m.firstDiff + 1) + ' 项') +
             '</td><td>' + (m.sameAsMultiset ? '相同,仅顺序' : '不同') +
-            '</td><td>' + (m.knownPatch ? '已知原版 bug' : '待查') +
+            '</td><td>' + (m.knownPatch ? '已知原版 bug'
+                           : (m.tieOrder ? '同分次序' : '待查')) +
             '</td></tr>';
         });
         html += '</table>';
@@ -635,7 +636,7 @@ function batch() {
 
 function showNote() {
   var kind = $('kind').value;
-  var text = kind.indexOf('dict:') === 0 ? NOTES.dict : NOTES[kind];
+  var text = NOTES[kind];
   var el = $('kindnote');
   el.textContent = text || '';
   el.style.display = text ? '' : 'none';
@@ -648,7 +649,13 @@ function loadInfo() {
     var parts = [];
     parts.push('<span class="pill' + (e.error ? ' bad' : '') + '">C++ 引擎</span>' +
       (e.error ? e.error : (e.hello.join(' v') || '?')) +
+      ' &middot; ' + (e.dict || []).join(' ') +
       ' &middot; <span class="mono" style="font-size:11px">' + e.path + '</span>');
+    parts.push('<span class="pill' + (e.extensionOn ? '' : ' off') + '">扩展词库</span>' +
+      (e.extensionOn ? '已加载'
+        : (e.extensionAvailable
+            ? '有包,未加载 —— 只在主词典查不到时才用得上'
+            : '没有包。生成:python tools/extract_dictionary.py --extension')));
     parts.push('<span class="pill' + (d.java.up ? '' : ' off') + '">Java 服务</span>' +
       (d.java.up ? d.java.url + ' 在跑' :
        d.java.url + ' 不通(' + d.java.error + ') —— severe 只能和 golden 比,词典接口不可用'));
@@ -685,6 +692,25 @@ $('clear').addEventListener('click', function () {
 // does not re-query.
 ['font', 'size', 'limit', 'view'].forEach(function (id) {
   $(id).addEventListener('change', rerender);
+});
+$('ext').addEventListener('change', function () {
+  var on = $('ext').value === '1';
+  setStatus('正在' + (on ? '加载' : '卸载') + '扩展词库(要重启引擎进程)…');
+  $('ext').disabled = true;
+  fetch('/api/extension?on=' + ($('ext').value))
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (res.ret === false) {
+        setStatus(res.data.error, 'err');
+        $('ext').value = '0';
+        return;
+      }
+      setStatus('扩展词库' + (res.data.on ? '已开' : '已关') +
+                ',再查一次看效果', 'ok');
+      loadInfo();
+    })
+    .catch(function (e) { setStatus('切换失败: ' + e.message, 'err'); })
+    .then(function () { $('ext').disabled = false; });
 });
 $('kind').addEventListener('change', function () { showNote(); $('key').focus(); });
 showNote();

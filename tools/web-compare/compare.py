@@ -79,16 +79,40 @@ class Engine:
     what makes the page survive rebuilding the engine underneath it.
     """
 
-    def __init__(self, exe):
+    def __init__(self, exe, extension=None):
         self.exe = exe
+        self.extension = extension
         self.lock = threading.Lock()
         self.proc = None
         self.hello = None
         self.started = 0
 
+    def set_extension(self, path):
+        """Restart the engine with or without the extension pack.
+
+        Whether the pack is loaded is decided when the process starts, so
+        switching it is a restart. That is the point of the switch: with the
+        pack off the answers are the original's, with it on they are the
+        original's plus words it does not have, and the difference is what
+        the page is for.
+        """
+        with self.lock:
+            self.extension = path
+            if self.proc is not None and self.proc.poll() is None:
+                try:
+                    self.proc.stdin.write(('QUIT' + chr(10)).encode('ascii'))
+                    self.proc.stdin.flush()
+                except OSError:
+                    pass
+                self.proc.kill()
+            self.proc = None
+
     def _spawn(self):
+        argv = [self.exe]
+        if self.extension:
+            argv += ['--extension', self.extension, '--preload-extension']
         self.proc = subprocess.Popen(
-            [self.exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, cwd=os.path.dirname(self.exe))
         self.started += 1
         self.hello = self._exchange('HELLO')
@@ -133,6 +157,15 @@ class Engine:
 
     def decompose(self, latin):
         return [item.split(' ') for item in self.request('DECOMPOSE ' + latin)]
+
+    def lookup(self, what, latin):
+        return self.request('LOOKUP %s %s' % (what, latin))
+
+    def dict_info(self):
+        try:
+            return self.request('DICT')
+        except EngineError as e:
+            return ['error', str(e)]
 
     def version(self):
         with self.lock:
@@ -369,9 +402,44 @@ def join_keys(splits):
     return [' '.join(k) for k in splits]
 
 
+# The three endpoints that go through the dictionary, and the LOOKUP word
+# that answers each of them. These became comparable when the dictionary was
+# ported; before that the C++ side had no dictionary at all.
+DICT_KINDS = {
+    'make': ('/ime/', 'make', 'Java 服务 · /ime/{key}', 'C++ · LOOKUP make'),
+    'dictfuzzy': ('/ime/fuzzy/', 'fuzzy', 'Java 服务 · /ime/fuzzy/{key}',
+                  'C++ · LOOKUP fuzzy'),
+    'score': ('/ime/fuzzy/score/', 'score', 'Java 服务 · /ime/fuzzy/score/{key}',
+              'C++ · LOOKUP score'),
+}
+
+ALL_KINDS = ('severe', 'fuzzy', 'decompose') + tuple(DICT_KINDS)
+
+
 def sides_for(kind, latin, engine, golden, want_java=True):
     """The lists to compare, in display order, with `cpp` always present."""
     sides = []
+    if kind in DICT_KINDS:
+        path, what, java_label, cpp_label = DICT_KINDS[kind]
+        if want_java:
+            items, ms, err = java_get(path + quote(latin, safe=''))
+            sides.append({
+                'id': 'java', 'label': java_label, 'ok': err is None,
+                'error': err, 'obj': items or [], 'runTime': ms,
+            })
+        t0 = time.perf_counter()
+        try:
+            found = engine.lookup(what, latin)
+            err = None
+        except EngineError as e:
+            found, err = [], str(e)
+        sides.append({
+            'id': 'cpp', 'label': cpp_label, 'ok': err is None, 'error': err,
+            'obj': found,
+            'runTime': round((time.perf_counter() - t0) * 1000, 1),
+        })
+        return sides
+
     if kind == 'decompose':
         if want_java:
             got = golden.decomp.get(latin)
@@ -437,7 +505,42 @@ def sides_for(kind, latin, engine, golden, want_java=True):
     return sides
 
 
-def verdict_for(sides):
+def score_sequence(items):
+    """The score of each item of a /ime/fuzzy/score list, in order."""
+    out = []
+    for item in items:
+        value = None
+        for field in item.split(',')[1:]:
+            name, _, text = field.partition(':')
+            if name == 'score':
+                value = text
+        out.append(value)
+    return out
+
+
+def tie_order_only(latin, engine):
+    """True when the two sides rank the same words with the same scores.
+
+    The port sorts words that score the same by frequency and then by code
+    point; the original leaves them in its HashMap's bucket order. That is
+    the one declared difference, so a page that cannot tell it apart from a
+    real one is not much use. Both sides are asked for the scored list: if
+    the words match as a set and the sequence of scores is identical, the
+    two lists are the same ranking and only a tie moved.
+    """
+    their_items, _, err = java_get('/ime/fuzzy/score/' + quote(latin, safe=''))
+    if err is not None or their_items is None:
+        return None
+    try:
+        my_items = engine.lookup('score', latin)
+    except EngineError:
+        return None
+    if sorted(my_items) != sorted(their_items):
+        return False
+    return score_sequence(my_items) == score_sequence(their_items)
+
+
+def verdict_for(sides, latin=None, engine=None, kind=None):
     """Every other side against `cpp`: that is the thing under test."""
     cpp = next((s for s in sides if s['id'] == 'cpp'), None)
     pairs = []
@@ -463,6 +566,9 @@ def verdict_for(sides):
         d['a'] = side['id']
         d['b'] = 'cpp'
         d['how'] = 'items'
+        if (not d['same'] and d['sameAsMultiset'] and kind in DICT_KINDS
+                and latin is not None and engine is not None):
+            d['tieOrder'] = tie_order_only(latin, engine)
         pairs.append(d)
     if not pairs:
         return {'same': None, 'pairs': pairs}
@@ -481,6 +587,7 @@ def verdict_for(sides):
     return {
         'same': all(p['same'] for p in pairs),
         'sameExceptPatches': all(p['same'] or p['knownPatch'] for p in pairs),
+        'sameExceptTies': all(p['same'] or p.get('tieOrder') for p in pairs),
         'pairs': pairs,
     }
 
@@ -489,6 +596,7 @@ def verdict_for(sides):
 
 ENGINE = None
 GOLDEN = None
+EXTENSION_PATH = None
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -516,6 +624,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.batch(path, query)
             if path == '/api/words':
                 return self.send_json({'obj': GOLDEN.words})
+            if path == '/api/extension':
+                return self.extension(query)
         except EngineError as e:
             return self.send_json({'error': '引擎: ' + str(e)}, ok=False,
                                   status=502)
@@ -557,6 +667,25 @@ class Handler(SimpleHTTPRequestHandler):
 
     # -- endpoints
 
+    def extension(self, query):
+        """Turns the optional 461,182-word pack on or off.
+
+        Whether it is loaded is fixed when the engine process starts, so
+        this restarts it. With the pack off the answers are the original's;
+        with it on they are the original's wherever the original had any,
+        plus words it does not have wherever it had none.
+        """
+        want = (query.get('on') or ['0'])[0] not in ('0', 'false', '')
+        if want and not EXTENSION_PATH:
+            return self.send_json(
+                {'error': 'no extension pack: generate it with '
+                          'python tools/extract_dictionary.py --extension, '
+                          'then restart this server with --extension'},
+                ok=False, status=400)
+        ENGINE.set_extension(EXTENSION_PATH if want else None)
+        self.send_json({'on': bool(want), 'path': EXTENSION_PATH or None,
+                        'dict': ENGINE.dict_info()})
+
     def info(self):
         java_items, _, java_err = java_get('/ime/severe/sain', timeout=3)
         try:
@@ -568,6 +697,9 @@ class Handler(SimpleHTTPRequestHandler):
             'engine': {
                 'path': ENGINE.exe, 'hello': hello, 'error': engine_err,
                 'restarts': max(0, ENGINE.started - 1),
+                'dict': ENGINE.dict_info(),
+                'extensionAvailable': bool(EXTENSION_PATH),
+                'extensionOn': bool(ENGINE.extension),
             },
             'java': {'url': JAVA, 'up': java_err is None, 'error': java_err,
                      'probe': java_items or []},
@@ -614,7 +746,7 @@ class Handler(SimpleHTTPRequestHandler):
     def compare(self, path):
         rest = self.tail(path, '/api/compare/')
         kind, _, latin = rest.partition('/')
-        if kind not in ('severe', 'fuzzy', 'decompose'):
+        if kind not in ALL_KINDS:
             return self.send_json({'error': 'unknown kind'}, ok=False,
                                   status=400)
         if not latin.strip():
@@ -622,7 +754,7 @@ class Handler(SimpleHTTPRequestHandler):
                                   status=400)
         sides = sides_for(kind, latin, ENGINE, GOLDEN)
         self.send_json({'kind': kind, 'input': latin, 'sides': sides,
-                        'verdict': verdict_for(sides)})
+                        'verdict': verdict_for(sides, latin, ENGINE, kind)})
 
     def batch(self, path, query):
         """The whole golden vocabulary through both sides, mismatches listed.
@@ -632,7 +764,7 @@ class Handler(SimpleHTTPRequestHandler):
         against C++ over a vocabulary.
         """
         kind = self.tail(path, '/api/batch/')
-        if kind not in ('severe', 'fuzzy', 'decompose'):
+        if kind not in ALL_KINDS:
             return self.send_json({'error': 'unknown kind'}, ok=False,
                                   status=400)
         limit = int((query.get('limit') or ['0'])[0] or 0)
@@ -647,16 +779,19 @@ class Handler(SimpleHTTPRequestHandler):
         t0 = time.perf_counter()
         for word in words:
             sides = sides_for(kind, word, ENGINE, GOLDEN)
-            for pair in verdict_for(sides)['pairs']:
+            for pair in verdict_for(sides, word, ENGINE, kind)['pairs']:
                 key = pair['a'] + ' vs ' + pair['b']
                 slot = counts.setdefault(key, {'same': 0, 'differ': 0,
-                                                'knownPatch': 0})
+                                                'knownPatch': 0,
+                                                'tieOrder': 0})
                 if pair['same']:
                     slot['same'] += 1
                 else:
                     slot['differ'] += 1
                     if pair.get('knownPatch'):
                         slot['knownPatch'] += 1
+                    if pair.get('tieOrder'):
+                        slot['tieOrder'] += 1
                     if len(mismatches) < 200:
                         mismatches.append({
                             'input': word, 'pair': key,
@@ -664,6 +799,7 @@ class Handler(SimpleHTTPRequestHandler):
                             'firstDiff': pair['firstDiff'],
                             'sameAsMultiset': pair['sameAsMultiset'],
                             'knownPatch': bool(pair.get('knownPatch')),
+                            'tieOrder': bool(pair.get('tieOrder')),
                             'onlyA': pair['onlyA'][:6],
                             'onlyB': pair['onlyB'][:6],
                         })
@@ -682,7 +818,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
-    global ENGINE, GOLDEN
+    global ENGINE, GOLDEN, EXTENSION_PATH
+    default_pack = os.path.join(REPO, 'data', 'dictionary-extra.tsv')
+    if os.path.exists(default_pack):
+        EXTENSION_PATH = default_pack
     exe = find_engine()
     if not exe:
         sys.stderr.write(
@@ -690,11 +829,13 @@ def main():
             '  cmake --build build --target zcode_stdio\n'
             'or set ZCODE_STDIO to its path.\n')
         return 1
-    ENGINE = Engine(exe)
+    ENGINE = Engine(exe)   # the pack starts off; /api/extension turns it on
     GOLDEN = Golden()
     print('page    http://127.0.0.1:%d/' % PAGE_PORT)
     print('engine  %s' % exe)
     print('java    %s  (proxied at /ime/*)' % JAVA)
+    print('pack    %s' % (EXTENSION_PATH or
+                          'none (python tools/extract_dictionary.py --extension)'))
     for line in GOLDEN.loaded:
         print('golden  %s' % line)
     if not GOLDEN.loaded:
