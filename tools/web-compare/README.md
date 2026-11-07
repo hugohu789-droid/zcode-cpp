@@ -15,8 +15,9 @@ files. Start it from `../ime-java-run` (see that directory's README).
 
 ## What is comparable, and what is not
 
-This library is the splicing engine only: no dictionary, no database. Of the
-Java service's four endpoints exactly one is the splicer and nothing else:
+All four of the Java service's endpoints have a counterpart here. One of
+them is the splicer and nothing else; the other three go through the
+dictionary:
 
 | Java | against |
 |---|---|
