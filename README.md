@@ -1,9 +1,14 @@
 # zcode-cpp
 
-A standalone C++20 port of the Mongolian letter-shaping engine of
+A standalone C++20 port of the Mongolian input method of
 [east-mod/ime](https://github.com/east-mod/ime) (Java, by Zorigt): Latin key
 sequence in, candidate ZCode words out, following traditional Mongolian
 orthography (positional forms, vowel harmony, letter-joining rules).
+
+Two halves. The **shaping engine** (`zcode/zcode.h`) turns keys into
+well-formed letter sequences; most of them are not words. The **dictionary**
+(`zcode/dictionary.h`) picks out the ones that are, from the original's own
+38,743-word list, compiled in. No database, no network, no files.
 
 GPL-2.0-or-later. See `NOTICE.md` for attribution and third-party data.
 
@@ -59,6 +64,42 @@ original order, `deduplicate` drops repeated ZCode strings keeping the first.
 No globals, no singletons, no I/O inside the algorithm. Candidates are
 returned in the same order as the Java original (see the deviations below).
 
+### The dictionary
+
+```cpp
+#include <zcode/dictionary.h>
+
+auto dictionary = zcode::Dictionary::create();   // 38,743 words, embedded
+zcode::Ime ime(*engine, *dictionary);
+
+ime.severe_make_word("bagsi");   // no dictionary; same as shape(severe)
+ime.fuzzy_make_word("bagsi");    // dictionary words, best score first
+ime.make_word("bagsi");          // the two merged, the original's way round
+```
+
+These are the three methods behind the original's HTTP endpoints, and they
+answer what it answers. `fuzzy_make_word` returns `SuggestWord`, which
+carries every number behind the ranking, as `/ime/fuzzy/score/{key}` does.
+
+The search looks like approximate string matching but is not. Every word in
+a length-K bucket has length exactly K, so a hit at tolerance K-L has
+distance exactly K-L, which can only be K-L insertions:
+
+> a word matches ⟺ the query is a **subsequence** of it, and `L ≤ |word| < 2L`
+
+and the JaroWinkler filter that follows reduces to "the first code point
+must match". Both were checked against the running original over its whole
+vocabulary. So the index here is a trie walked greedily, not the original's
+Burkhard-Keller tree: identical results, measured 819× faster (0.29 ms
+against 237.57 ms for the same 60 lookups). A faithful BK tree is kept as
+the test oracle. Loading and indexing the dictionary takes 36 ms.
+
+An optional pack of the 461,182 words the original never loads can be
+generated with `tools/extract_dictionary.py --extension` and attached with
+`Ime::set_extension`. It is consulted only when the main dictionary answers
+with nothing -- which is also when the original answers with nothing -- so
+it fills gaps without contradicting it.
+
 ## Deviations from the Java original
 
 Two bugs of the original are fixed (everything else, including its other
@@ -104,7 +145,10 @@ Add `-Poriginal` (and another output directory) for the unpatched original.
 |---|---|
 | `include/zcode/zcode.h` | public API |
 | `src/` | the port, one file per Java class or group (each names its origin) |
-| `data/` | `zcode.tsv`, `shapes.tsv`, `rules.tsv`, `keyboard.tsv` — the declarative half, embedded at build time |
+| `include/zcode/dictionary.h` | public API of the dictionary half |
+| `data/` | `zcode.tsv`, `shapes.tsv`, `rules.tsv`, `keyboard.tsv`, `dictionary.tsv` — embedded at build time |
+| `service/` | `zcode_stdio`, the engine as a process a host can drive |
+| `tools/web-compare/` | a page that diffs this against the running Java service |
 | `testdata/` | golden files from the Java original |
 | `tools/golden-java/` | the Java harness that generates them |
 | `docs/` | analysis reports |

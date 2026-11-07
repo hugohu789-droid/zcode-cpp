@@ -12,13 +12,26 @@ engine of **east-mod/ime** by **Zorigt** (east-mod):
 
 This port is a derivative work and is distributed under
 **GPL-2.0-or-later** (see `LICENSE`). Every ported source file names the Java
-class it came from. Only the shaping engine was ported (`letter/`,
-`letter/base/`, `letter/splice/`, `keyboard/`, `filter/`, parts of
-`common/Strings`); the Spring Boot service, MyBatis/MySQL access, HTTP
-controllers and the approximate-matching code were not.
+class it came from.
+
+Ported: the shaping engine (`letter/`, `letter/base/`, `letter/splice/`,
+`keyboard/`, `filter/`, parts of `common/Strings`), and the dictionary half
+— `approximate/matching/` and the three methods of
+`input/method/service/InputMethodService` behind the HTTP endpoints. Not
+ported: the Spring Boot service, MyBatis/MySQL access, the HTTP controllers
+and the thread pool.
 
 The data tables in `data/` are transcriptions of the Java classes named in
-their headers. The golden files in `testdata/` were produced by running the
+their headers. `data/dictionary.tsv` is the `word` table of that project's
+own `ime.sql`, restricted to the rows the service loads
+(`frequency > 44`); `tools/extract_dictionary.py` regenerates it, and with
+`--extension` also writes the rows the service never loads. Both are the
+original work's data and carry its licence.
+
+`testdata/golden_dict.tsv` is what the original *service* answered, captured
+over HTTP by `tools/golden_dict.py`, because its dictionary lives in MySQL
+and cannot be dumped offline like the rest. The golden files in `testdata/`
+were produced by running the
 original Java code (see `tools/golden-java/`) with two bug fixes applied:
 `tools/golden-java/src/patches/` contains modified copies of the original
 `LetterSplicer` and `FrontLikeTailOrhichE` (GPL, by Zorigt), each header
