@@ -31,7 +31,7 @@
 | `keyboard/KeyboardLayout` | `data/keyboard.tsv`、`src/keyboard_layout.*` | 与 Java 导出的 30 个键 × 3 个位置比对 |
 | `keyboard/Decomposer` | `src/decomposer.*` | golden 分解数据 |
 | `filter/KeyFilter`、`KeyFilterFactory`、`BTailKeyFilter` | `src/key_filter.*` | golden 过滤数据 |
-| `common/Strings` | `src/strings.h` | 间接验证（空白输入的判断） |
+| `common/Strings` | `src/common_strings.h` | 间接验证（空白输入的判断） |
 
 ### 2.1 词典一半（初版列为"范围外"，现已移植）
 
@@ -69,7 +69,7 @@
 |---|---|
 | 系统 | Windows 11 Pro 10.0.26200 |
 | 编译器 | MSVC 17.14（VS 2022 Build Tools），C++20，`/W4 /permissive- /utf-8` |
-| 构建 | CMake 4.2 + Ninja 1.13；GoogleTest 1.15.2（固定版本并校验 SHA-256） |
+| 构建 | CMake 4.2 + Ninja 1.13；GoogleTest 1.16.0（固定版本并校验 SHA-256） |
 | Java 对照 | JDK 1.8.0_501（HotSpot）、Maven 3.10.0 |
 
 ## 4. 对照基准（golden 数据）
@@ -204,12 +204,17 @@ golden 文件来自直接运行 Java 类；这一节是另一回事——把**�
 
 ## 9. 未覆盖或尚未验证的部分
 
-- **平台**：Windows + MSVC 上构建并全部测试通过。Linux（Ubuntu 24.04 / GCC）上
-  **库和 `zcode_stdio` 可以构建并通过功能冒烟**（`HELLO`、`SHAPE`、`LOOKUP`、
-  `TYPE ... full`、`USER`、`DICT` 都正常），但**测试套在 Linux 上编译不过**：
-  固定版本的 GoogleTest 1.15.2 缺少 GCC 13+ 需要的 `<strings.h>`，上游在该版本之后才修。
-  装一个系统 GoogleTest（构建会优先用 `find_package(GTest CONFIG)`）或抬高固定版本即可。
-  macOS 未验证。
+- **平台**：Windows + MSVC 与 Linux（Ubuntu 24.04 / GCC 13）两边都构建并
+  **83/83 全部通过**；`zcode_stdio` 在两边也都通过功能冒烟。macOS 未验证。
+
+  这里有过一次误诊，值得记下来：测试套原先在 Linux 上根本编译不过，报
+  `strcasecmp was not declared`，我先后归咎于 GoogleTest 的版本和 `-std=c++20`
+  的严格模式，两个都不对。真正的原因是**头文件重名**——`src/strings.h`
+  移植自 `common/Strings`，而测试目标为了白盒测试把 `src` 放进了包含路径，
+  于是 GoogleTest 的 `#include <strings.h>` 拿到的是我们这个文件，POSIX 的
+  那个被挡住了。Windows 上永远看不到：那里没有 POSIX `<strings.h>`，
+  GoogleTest 走的是另一个分支，根本不会去 include 它。改名为
+  `src/common_strings.h` 后两边都通过。
 - **Java 字段顺序**：依赖 HotSpot 的 `getDeclaredFields()` 返回声明顺序（JLS 并不保证）。数据已经按 HotSpot 的实测顺序固化在 `shapes.tsv` 中。
 - **输入长度**：长度 ≤3 是穷举的；4–8 是抽样；更长的输入只覆盖了个别精选词和长重复串。
 - **哈希比较**：3 行候选特别多的 fuzzy 数据只比较了数量和哈希，没有逐个比较候选。

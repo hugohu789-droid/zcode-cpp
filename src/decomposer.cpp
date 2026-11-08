@@ -3,7 +3,7 @@
 // Ported from com.zorigt.ime.keyboard.Decomposer.
 #include "decomposer.h"
 
-#include "strings.h"
+#include "common_strings.h"
 
 namespace zcode {
 

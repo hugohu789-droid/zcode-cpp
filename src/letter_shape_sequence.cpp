@@ -4,7 +4,7 @@
 // com.zorigt.ime.letter.NatureUtil.
 #include "letter_shape_sequence.h"
 
-#include "strings.h"
+#include "common_strings.h"
 
 namespace zcode {
 

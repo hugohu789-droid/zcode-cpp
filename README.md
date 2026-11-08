@@ -180,13 +180,9 @@ tests in 10 suites; the dictionary half is additionally checked against the
 *running* Java service over its whole vocabulary by
 `tools/web-compare` (see that directory's README).
 
-**Linux.** The library and `zcode_stdio` build and run with GCC on Ubuntu
-24.04. The **test suite** does not build there: the pinned GoogleTest
-1.15.2 misses the `<strings.h>` include that GCC 13+ needs for
-`strcasecmp`, which upstream fixed after that release. Either install a
-system GoogleTest (the build prefers one: `find_package(GTest CONFIG)`
-runs first) or raise the pinned version. The port itself is
-platform-independent and has no `#ifdef` outside `service/`.
+Builds and passes on Windows (MSVC) and Linux (GCC, Ubuntu 24.04): 83/83
+on both. The port itself is platform-independent and has no `#ifdef`
+outside `service/`.
 
 ## Golden data
 

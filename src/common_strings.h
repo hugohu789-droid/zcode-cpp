@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // Ported from com.zorigt.ime.common.Strings (only what the engine uses).
+//
+// Named common_strings.h and not strings.h: the test target puts `src` on
+// the include path for the white-box tests, and POSIX has a <strings.h>.
+// A file called strings.h here therefore answered GoogleTest's
+// `#include <strings.h>`, which hid strcasecmp and stopped the suite
+// compiling on Linux at all. Windows never showed it -- there is no POSIX
+// <strings.h> there, so GoogleTest takes another branch and never asks.
 #pragma once
 
 #include <string_view>

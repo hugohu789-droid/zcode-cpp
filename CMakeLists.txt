@@ -65,8 +65,8 @@ if(ZCODE_BUILD_TESTS)
     if(NOT GTest_FOUND)
         include(FetchContent)
         FetchContent_Declare(googletest
-            URL https://github.com/google/googletest/releases/download/v1.15.2/googletest-1.15.2.tar.gz
-            URL_HASH SHA256=7b42b4d6ed48810c5362c265a17faebe90dc2373c885e5216439d37927f02926
+            URL https://github.com/google/googletest/releases/download/v1.16.0/googletest-1.16.0.tar.gz
+            URL_HASH SHA256=78c676fc63881529bf97bf9d45948d905a66833fbfa5318ea2cd7478cb98f399
             DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
